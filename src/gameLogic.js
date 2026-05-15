@@ -26,6 +26,15 @@ function getPowerMultiplier(power) {
   return Math.max(0.35, power.supply / power.demand);
 }
 
+function getPowerFeeMultiplier(power) {
+  if (!power || power.demand <= 0) return 1;
+  if (power.ok) return 1;
+
+  // Opłata za prąd nie ma minimum.
+  // Jeśli miasto nie dostarcza prądu, nie może normalnie kasować mieszkańców.
+  return Math.max(0, Math.min(1, power.supply / power.demand));
+}
+
 function isPowerDependent(type) {
   return POWER_DEPENDENT_TYPES.includes(type);
 }
@@ -51,10 +60,14 @@ export function calcStats(blds, roads, loan, fees, weather) {
 
   const rawPower = calcPower(act, weather);
   const powerMultiplier = getPowerMultiplier(rawPower);
+  const powerFeeMultiplier = getPowerFeeMultiplier(rawPower);
+
   const power = {
     ...rawPower,
     multiplier: powerMultiplier,
     efficiency: Math.round(powerMultiplier * 100),
+    feeMultiplier: powerFeeMultiplier,
+    feeEfficiency: Math.round(powerFeeMultiplier * 100),
   };
 
   act.forEach(b => {
@@ -101,7 +114,12 @@ export function calcStats(blds, roads, loan, fees, weather) {
   // Opłaty mieszkańców.
   const ri = Math.floor(pop * (fees?.rent  || 0) / 10);
   const wi = Math.floor(pop * (fees?.water || 0) / 10);
-  const pi = Math.floor(pop * (fees?.power || 0) / 10);
+
+  // Opłata za prąd:
+  // piBase = ile miasto mogłoby zarobić przy pełnym dostępie do energii.
+  // pi = realny dochód po uwzględnieniu dostępności prądu.
+  const piBase = Math.floor(pop * (fees?.power || 0) / 10);
+  const pi = Math.floor(piBase * powerFeeMultiplier);
 
   // Opłata za transport — za każdy przystanek/tramwaj/metro, max x5.
   const transitCount = act.filter(b => ['bus','tram','metro'].includes(b.type)).length;
@@ -118,6 +136,17 @@ export function calcStats(blds, roads, loan, fees, weather) {
   if((fees?.power   || 0) > 5) h.services = (h.services||0) - Math.floor((fees.power - 5) / 3);
   if((fees?.transit || 0) > 5) h.services = (h.services||0) - Math.floor((fees.transit-5) / 4);
   if((fees?.sewage  || 0) > 5) h.services = (h.services||0) - Math.floor((fees.sewage - 5) / 4);
+
+  // Dodatkowa kara:
+  // jeśli miasto ma deficyt prądu, a mimo tego pobiera opłatę za prąd,
+  // mieszkańcy mocniej tracą zadowolenie.
+  if(power.deficit > 0 && (fees?.power || 0) > 0) {
+    const missingPowerFeePercent = 100 - power.feeEfficiency;
+    const unfairPowerFeePenalty = Math.ceil(((fees.power || 0) * missingPowerFeePercent) / 25);
+
+    h.services = (h.services||0) - unfairPowerFeePenalty;
+    h.housing = (h.housing||0) - Math.ceil(unfairPowerFeePenalty / 2);
+  }
 
   // Deficyty obniżają zadowolenie.
   if(power.deficit > 0) {
@@ -147,6 +176,11 @@ export function calcStats(blds, roads, loan, fees, weather) {
     wtOk: wt <= 0,
 
     ri, wi, pi, ti, si,
+
+    // Dodatkowa informacja techniczna:
+    // ile opłata za prąd dałaby przy 100% dostaw energii.
+    piBase,
+
     feeInc: ri + wi + pi + ti + si,
 
     sat: {
@@ -186,6 +220,17 @@ export function genInbox(G) {
       sub:"Produkcja spada przez brak energii",
       body:`Firmy i usługi zależne od prądu pracują tylko na ${s.power.efficiency}%. Dochody fabryk, sklepów, biur, banków, szkół i szpitali są obniżone.`,
       pri:"high",
+      read:false
+    });
+
+  if(!s.pwOk && (G.fees?.power || 0) > 0)
+    msgs.push({
+      id:"pwrfee",
+      icon:"💸",
+      from:"Mieszkańcy",
+      sub:"Płacimy za prąd, którego brakuje",
+      body:`Opłata za prąd działa tylko na ${s.power?.feeEfficiency || 0}%, bo miasto ma deficyt energii. Realny dochód z tej opłaty: ${fa(s.pi)} zł zamiast ${fa(s.piBase || 0)} zł/mie.`,
+      pri:"med",
       read:false
     });
 
