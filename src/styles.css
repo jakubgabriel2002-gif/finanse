@@ -3,7 +3,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --topbar-base: 52px;
   --bottomnav-base: 70px;
-  --map-top-gap: 10px;
+  --map-top-gap: 16px;
   --topbar-total: calc(var(--topbar-base) + var(--safe-top));
   --bottomnav-total: calc(var(--bottomnav-base) + var(--safe-bottom));
 }
@@ -123,7 +123,6 @@ body,html,#root{
   font-size:10px;
 }
 
-/* MAIN — lekko niżej, żeby mapa nie była przycinana przez topbar/safe-area */
 #main{
   position:fixed;
   top:calc(var(--topbar-total) + var(--map-top-gap));
@@ -254,10 +253,9 @@ body,html,#root{
   pointer-events:none;
 }
 
-/* Build banner niżej i zawsze ponad mapą */
 #build-banner{
-  position:absolute;
-  top:18px;
+  position:fixed;
+  top:calc(var(--topbar-total) + 20px);
   left:50%;
   transform:translateX(-50%);
   border-radius:10px;
@@ -265,7 +263,7 @@ body,html,#root{
   font-size:12px;
   font-weight:700;
   color:#fff;
-  z-index:800;
+  z-index:900;
   display:flex;
   align-items:center;
   gap:10px;
@@ -275,20 +273,20 @@ body,html,#root{
 }
 
 #ev-popup{
-  position:absolute;
-  top:70px;
+  position:fixed;
+  top:calc(var(--topbar-total) + 74px);
   left:50%;
   transform:translateX(-50%);
   width:min(300px,calc(100vw - 20px));
   border-radius:12px;
   padding:12px 14px;
-  z-index:700;
+  z-index:880;
   pointer-events:auto;
 }
 
 #sel-panel{
-  position:absolute;
-  bottom:12px;
+  position:fixed;
+  bottom:calc(var(--bottomnav-total) + 12px);
   left:50%;
   transform:translateX(-50%);
   width:min(340px,calc(100vw - 16px));
@@ -296,20 +294,19 @@ body,html,#root{
   border:1px solid rgba(0,180,255,0.3);
   border-radius:12px;
   padding:12px 14px;
-  z-index:750;
+  z-index:860;
   box-shadow:0 8px 32px rgba(0,0,0,0.7);
   pointer-events:auto;
 }
 
-/* Przyciski mapy niżej i wyżej w warstwach */
 #zoom-btns{
-  position:absolute;
+  position:fixed;
   right:10px;
-  top:64px;
+  top:calc(var(--topbar-total) + 76px);
   display:flex;
   flex-direction:column;
   gap:4px;
-  z-index:850;
+  z-index:920;
   pointer-events:auto;
 }
 
@@ -559,10 +556,10 @@ body,html,#root{
 
 #notifs{
   position:fixed;
-  top:calc(58px + var(--safe-top));
+  top:calc(var(--topbar-total) + 8px);
   left:50%;
   transform:translateX(-50%);
-  z-index:900;
+  z-index:940;
   display:flex;
   flex-direction:column;
   gap:5px;
