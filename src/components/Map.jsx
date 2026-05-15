@@ -2,10 +2,20 @@ import React from 'react';
 import { TILE, TC, TB, BD, BT, GS, TR } from '../data.js';
 import { nR, nT, ft } from '../gameLogic.js';
 
+function getMapViewportSize() {
+  const mapView = document.getElementById('map-view');
+
+  return {
+    width: mapView?.clientWidth || window.innerWidth,
+    height: mapView?.clientHeight || window.innerHeight,
+  };
+}
+
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
   const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
   const c = tpx/2, rw = Math.max(4, tpx*0.25);
+
   return (
     <svg className="road-svg" style={{left:gx*tpx,top:gy*tpx,width:tpx,height:tpx}} viewBox={`0 0 ${tpx} ${tpx}`}>
       <rect x={c-rw/2} y={c-rw/2} width={rw} height={rw} fill="#282828"/>
@@ -23,7 +33,8 @@ function BldTile({ b, tpx, isSel, hasRoad, now }) {
   const d = BD[b.type];
   const clr = d.cl[Math.min(b.lv-1, d.cl.length-1)];
   const sc = Math.min(0.5 + b.lv*0.08, 0.9);
-  const sz = tpx*sc, off = (tpx-sz)/2;
+  const sz = tpx*sc;
+  const off = (tpx-sz)/2;
   const noR = !d.nr && !hasRoad;
   const prog = b.building ? Math.max(0, Math.min(1, 1-(b.buildEnd-now)/BT[b.lv-1])) : 1;
   const tl = b.building ? Math.max(0, Math.ceil(b.buildEnd-now)) : 0;
@@ -53,14 +64,17 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
   const tpx = TILE * cam.zoom;
   const sz = GS(G.thLv);
   const ter = TR[sz] || TR[24];
-  const vW = window.innerWidth;
-  const vH = window.innerHeight - 52 - 70;
+  const viewport = getMapViewportSize();
+  const vW = viewport.width;
+  const vH = viewport.height;
   const now = Date.now() / 1000;
 
-  const vx0 = Math.max(0, Math.floor(-cam.x/tpx)-1);
-  const vy0 = Math.max(0, Math.floor(-cam.y/tpx)-1);
-  const vx1 = Math.min(sz, Math.ceil((-cam.x+vW)/tpx)+2);
-  const vy1 = Math.min(sz, Math.ceil((-cam.y+vH)/tpx)+2);
+  const buffer = 4;
+
+  const vx0 = Math.max(0, Math.floor(-cam.x / tpx) - buffer);
+  const vy0 = Math.max(0, Math.floor(-cam.y / tpx) - buffer);
+  const vx1 = Math.min(sz, Math.ceil((-cam.x + vW) / tpx) + buffer);
+  const vy1 = Math.min(sz, Math.ceil((-cam.y + vH) / tpx) + buffer);
 
   const act = G.buildings.filter(b => !b.building);
 
@@ -71,6 +85,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
       const isRd = G.roads.has(`${gx},${gy}`);
       const bg = isRd ? '#1a1a1a' : (TC[t]||TC[0]);
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
+
       tiles.push(
         <div key={`t${gx},${gy}`} className="tile"
           style={{left:gx*tpx,top:gy*tpx,width:tpx,height:tpx,background:bg,borderColor:bo}}
@@ -100,16 +115,38 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
       for(let gx=vx0; gx<vx1; gx++) {
         const key = `${gx},${gy}`;
         const t = ter[gy]?.[gx] ?? 0;
+
         if(t === 2) continue;
+
         if(G.buildMode === 'road') {
           if(!G.roads.has(key) && !G.grid[key]) {
-            previews.push(<div key={`pv${key}`} className="pv-tile"
-              style={{left:gx*tpx,top:gy*tpx,width:tpx,height:tpx,background:"rgba(255,200,0,0.12)",border:"1px dashed rgba(255,200,0,0.4)"}}/>);
+            previews.push(
+              <div key={`pv${key}`} className="pv-tile"
+                style={{
+                  left:gx*tpx,
+                  top:gy*tpx,
+                  width:tpx,
+                  height:tpx,
+                  background:"rgba(255,200,0,0.12)",
+                  border:"1px dashed rgba(255,200,0,0.4)",
+                }}
+              />
+            );
           }
         } else {
           if(!G.grid[key] && !G.roads.has(key)) {
-            previews.push(<div key={`pv${key}`} className="pv-tile"
-              style={{left:gx*tpx,top:gy*tpx,width:tpx,height:tpx,background:"rgba(0,255,150,0.08)",border:"1px dashed rgba(0,255,150,0.3)"}}/>);
+            previews.push(
+              <div key={`pv${key}`} className="pv-tile"
+                style={{
+                  left:gx*tpx,
+                  top:gy*tpx,
+                  width:tpx,
+                  height:tpx,
+                  background:"rgba(0,255,150,0.08)",
+                  border:"1px dashed rgba(0,255,150,0.3)",
+                }}
+              />
+            );
           }
         }
       }
@@ -121,8 +158,10 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
     .map(b => {
       const d = BD[b.type];
       if(!d) return null;
+
       const hasR = d.nr || nR(b.x,b.y,G.roads) || nT(b.x,b.y,act);
       const isSel = G.selUID === b.uid;
+
       return (
         <div key={b.uid} className="bld"
           style={{left:b.x*tpx,top:b.y*tpx,width:tpx,height:tpx,zIndex:isSel?20:b.building?8:6}}
