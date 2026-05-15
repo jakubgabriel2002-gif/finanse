@@ -71,19 +71,19 @@ export const EVTS = [
   {t:"🔥 Pożar w dzielnicy",  m:"Straty w infrastrukturze.",          b:-1200,tp:"err"},
 ];
 
-// Tutorial steps
 export const TSTEPS = [
   {
     title:"Witaj w NeoCity! 🏙️",
-    body:"Jesteś burmistrzem pustego terenu.\nZbuduj miasto od zera!\n\nZacznijmy od drogi — bez niej budynki zarabiają tylko 5%.",
-    btn:"Buduj drogę →",
+    body:"Jesteś burmistrzem pustego terenu.\nZbuduj miasto od zera!\n\nZacznijmy od dróg — bez nich budynki zarabiają tylko 5%.",
+    btn:"Buduj drogi →",
     action:"road",
   },
   {
-    title:"🛣️ Postaw drogę",
-    body:"Kliknij na mapie żeby postawić drogę (200 zł/kafelek).\n\nPostaw przynajmniej 3 kafelki.\n\nSamouczek wróci automatycznie!",
-    btn:null,
-    waitForRoads:3,
+    title:"🛣️ Zbuduj sieć dróg",
+    body:"Postaw 20 kafelków drogi.\n\nNie musisz robić idealnego układu — ważne, żeby miasto miało bazową sieć połączeń.\n\nGdy licznik dobije do 20/20, kliknij przycisk i przejdziesz dalej.",
+    btn:"Gotowe — przejdź dalej →",
+    action:"finish_roads",
+    waitForRoads:20,
   },
   {
     title:"🏛️ Czas na Ratusz!",
