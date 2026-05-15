@@ -2,6 +2,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TILE, ROAD_COST, BT, BL, MS, GS, BD, LIM, TR, EVTS, WEATHERS, TSTEPS } from './data.js';
 import { calcStats, genInbox, fa, fm } from './gameLogic.js';
 import {
+  createInitialGameState,
+  loadGame,
+  saveGame,
+  clearSavedGame,
+} from './state/initialState.js';
+import {
   SOLAR_UPGRADE_COST,
   FILTER_UPGRADE_COST,
   canInstallSolar,
@@ -19,44 +25,8 @@ import TownhallTab from './components/tabs/TownhallTab.jsx';
 import InboxTab from './components/tabs/InboxTab.jsx';
 import StatsTab from './components/tabs/StatsTab.jsx';
 
-// Budżet startowy: 90 000 zł
-// Koszt tutorialu: ratusz(3k) + 2x blok(10k) + dom(2k) + fabryka(8k) + szpital(12k) + drogi(~2k) = ~37k
-// Zostaje: ~50 000 zł po ukończeniu samouczka
-const INIT_STATE = {
-  budget: 90000,
-  buildings: [],
-  grid: {},
-  roads: new Set(),
-  thLv: 1, month: 1, year: 1, speed: 1, paused: false,
-  stats: null,
-  log: [{id:0,label:"🏙️ NeoCity — nowa gra!",amount:0}],
-  taxRate: 12,
-  policies: {green:false,work:false,night:false,trans:false},
-  fees: {rent:0,water:0,power:0,transit:0,sewage:0},
-  loan: null, elTmr: 48, riotOn: false, riotTmr: 0,
-  inbox: [], events: [], news: [],
-  nextUID: 100,
-  buildMode: null,
-  selUID: null, tab: "map",
-  weather: WEATHERS[0],
-  tutDone: false, tutStep: 0, auditCD: 0,
-};
-
-function loadGame() {
-  try {
-    const raw = localStorage.getItem('neocity_v7');
-    if(!raw) return null;
-    const save = JSON.parse(raw);
-    save.roads = new Set(save.roads);
-    save.weather = save.weather || WEATHERS[0];
-    save.buildMode = null;
-    save.fees = {rent:0,water:0,power:0,transit:0,sewage:0, ...(save.fees||{})};
-    return save;
-  } catch(e) { return null; }
-}
-
 export default function App() {
-  const [G, setG] = useState(() => loadGame() || {...INIT_STATE, roads: new Set()});
+  const [G, setG] = useState(() => loadGame() || createInitialGameState());
   const [cam, setCam] = useState({x:0,y:0,zoom:1.0});
   const [evPopup, setEvPopup] = useState(null);
   const [notifs, setNotifs] = useState([]);
@@ -90,10 +60,7 @@ export default function App() {
 
   useEffect(() => {
     if(!G.tutDone) return;
-    try {
-      const save = {...G, roads: [...G.roads], buildMode: null};
-      localStorage.setItem('neocity_v7', JSON.stringify(save));
-    } catch(e) {}
+    saveGame(G);
   }, [G]);
 
   useEffect(() => {
@@ -391,10 +358,10 @@ export default function App() {
   const resetGame = useCallback(() => {
     if(!window.confirm("Na pewno chcesz zresetować grę? Wszystkie postępy zostaną utracone.")) return;
 
-    localStorage.removeItem('neocity_v7');
+    clearSavedGame();
 
-    const fresh={...INIT_STATE,roads:new Set(),buildings:[],grid:{},log:[{id:0,label:"🏙️ NeoCity — nowa gra!",amount:0}]};
-    const stats=calcStats([],new Set(),null,fresh.fees,fresh.weather);
+    const fresh = createInitialGameState();
+    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather);
 
     setG({...fresh,stats,inbox:genInbox({...fresh,stats})});
 
