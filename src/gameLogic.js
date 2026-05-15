@@ -8,6 +8,28 @@ export const fa = n => Math.abs(Math.round(n)).toLocaleString('pl');
 export const fm = n => (n>=0?'+':'-')+fa(n);
 export function ft(s){if(s<=0)return'✓';if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/3600)}h`;return`${Math.floor(s/86400)}d`;}
 
+const POWER_DEPENDENT_TYPES = [
+  'factory',
+  'shop',
+  'office',
+  'bank',
+  'hospital',
+  'school',
+];
+
+function getPowerMultiplier(power) {
+  if (!power || power.demand <= 0) return 1;
+  if (power.ok) return 1;
+
+  // Brak prądu ma realnie boleć, ale nie zabija gry od razu.
+  // Budynki zależne od energii działają od 35% do 100%.
+  return Math.max(0.35, power.supply / power.demand);
+}
+
+function isPowerDependent(type) {
+  return POWER_DEPENDENT_TYPES.includes(type);
+}
+
 export function buildStarterRoads(cx, cy) {
   const r = new Set();
   const a = (x,y) => r.add(`${x},${y}`);
@@ -27,7 +49,13 @@ export function calcStats(blds, roads, loan, fees, weather) {
   const h = {housing:0, jobs:0, edu:0, env:0, services:0};
   const act = blds.filter(b => !b.building);
 
-  const power = calcPower(act, weather);
+  const rawPower = calcPower(act, weather);
+  const powerMultiplier = getPowerMultiplier(rawPower);
+  const power = {
+    ...rawPower,
+    multiplier: powerMultiplier,
+    efficiency: Math.round(powerMultiplier * 100),
+  };
 
   act.forEach(b => {
     const d = BD[b.type]; if(!d) return;
@@ -43,7 +71,7 @@ export function calcStats(blds, roads, loan, fees, weather) {
     co2 += d.co2 * b.lv * (b.co2f ? 0.6 : 1);
 
     // Woda nadal zostaje w tym pliku.
-    // Prąd został przeniesiony do osobnego modułu: calcPower().
+    // Prąd jest liczony osobno w calcPower().
     wt += d.wt * b.lv;
 
     if(d.jobs > 0) jobs += d.jobs * b.lv;
@@ -57,13 +85,17 @@ export function calcStats(blds, roads, loan, fees, weather) {
   const workers = Math.floor(pop * 0.6);
   const er = jobs > 0 ? Math.min(workers, jobs) / jobs : 1;
 
-  // Przychody — budynki zależne od pracowników skalują się według zatrudnienia.
+  // Przychody:
+  // - budynki zależne od pracowników skalują się według zatrudnienia,
+  // - budynki zależne od prądu skalują się według dostępnej energii.
   act.forEach(b => {
     const d = BD[b.type]; if(!d) return;
     const ok = d.nr || nR(b.x,b.y,roads) || nT(b.x,b.y,act);
-    const m = ok ? 1 : 0.05;
-    const jm = ['factory','office','shop','bank'].includes(b.type) ? er : 1;
-    inc += d.inc * b.lv * m * jm;
+    const roadMultiplier = ok ? 1 : 0.05;
+    const jobMultiplier = ['factory','office','shop','bank'].includes(b.type) ? er : 1;
+    const energyMultiplier = isPowerDependent(b.type) ? powerMultiplier : 1;
+
+    inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier;
   });
 
   // Opłaty mieszkańców.
@@ -87,8 +119,13 @@ export function calcStats(blds, roads, loan, fees, weather) {
   if((fees?.transit || 0) > 5) h.services = (h.services||0) - Math.floor((fees.transit-5) / 4);
   if((fees?.sewage  || 0) > 5) h.services = (h.services||0) - Math.floor((fees.sewage - 5) / 4);
 
-  // Deficyty obniżają zadowolenie z mieszkań.
-  if(power.deficit > 0) h.housing = (h.housing||0) - Math.floor(power.deficit / 5);
+  // Deficyty obniżają zadowolenie.
+  if(power.deficit > 0) {
+    h.housing = (h.housing||0) - Math.floor(power.deficit / 5);
+    h.services = (h.services||0) - Math.floor(power.deficit / 8);
+    h.jobs = (h.jobs||0) - Math.floor(power.deficit / 10);
+  }
+
   if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 5);
 
   // Rata pożyczki.
@@ -136,7 +173,18 @@ export function genInbox(G) {
       icon:"⚡",
       from:"Mieszkańcy",
       sub:"Brak prądu!",
-      body:`Deficyt energii: ${s.pw} j. Zbuduj elektrownię, farmę solarną lub wiatrak!`,
+      body:`Deficyt energii: ${s.pw} j. Budynki zależne od prądu działają na ${s.power?.efficiency || 35}%. Zbuduj elektrownię, farmę solarną lub wiatrak!`,
+      pri:"high",
+      read:false
+    });
+
+  if(!s.pwOk && s.power?.efficiency < 80)
+    msgs.push({
+      id:"pweff",
+      icon:"🏭",
+      from:"Przedsiębiorcy",
+      sub:"Produkcja spada przez brak energii",
+      body:`Firmy i usługi zależne od prądu pracują tylko na ${s.power.efficiency}%. Dochody fabryk, sklepów, biur, banków, szkół i szpitali są obniżone.`,
       pri:"high",
       read:false
     });
