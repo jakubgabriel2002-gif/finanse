@@ -2,10 +2,41 @@ import React from 'react';
 import { POLICIES, MS, GS } from '../../data.js';
 import { fa, fm } from '../../gameLogic.js';
 
+function getPowerData(s) {
+  return s.power || {
+    demand: Math.max(0, s.pw || 0),
+    supply: Math.max(0, -(s.pw || 0)),
+    balance: -(s.pw || 0),
+    deficit: Math.max(0, s.pw || 0),
+    surplus: Math.max(0, -(s.pw || 0)),
+    ok: s.pwOk,
+    efficiency: s.pwOk ? 100 : 35,
+    feeEfficiency: s.pwOk ? 100 : 0,
+    consumers: [],
+    producers: [],
+  };
+}
+
+function topByValue(items = []) {
+  if (!items.length) return null;
+  return [...items].sort((a, b) => b.value - a.value)[0];
+}
+
+function signedValue(value) {
+  if (value > 0) return `+${fa(value)}`;
+  if (value < 0) return `-${fa(value)}`;
+  return '0';
+}
+
 export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFee, onTax, onReset }) {
   const s = G.stats;
   if(!s) return null;
+
   const pc = (G.policies.green?500:0)+(G.policies.work?800:0)+(G.policies.night?300:0)+(G.policies.trans?600:0);
+  const power = getPowerData(s);
+  const topProducer = topByValue(power.producers);
+  const topConsumer = topByValue(power.consumers);
+  const powerBalanceColor = power.balance >= 0 ? '#00e87a' : '#ff3d5a';
 
   return (
     <div className="inner">
@@ -18,7 +49,7 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
       {(!s.pwOk||!s.wtOk||s.er<50) && (
         <div style={{background:"rgba(255,61,90,0.08)",border:"1px solid rgba(255,61,90,0.3)",borderRadius:10,padding:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:"#ff3d5a",marginBottom:6}}>🚨 PILNE PROBLEMY</div>
-          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Deficyt energii {s.pw} — zbuduj elektrownię lub farmę solarną!</div>}
+          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Deficyt energii {fa(power.deficit)} j. — zbuduj elektrownię, farmę solarną albo wiatrak!</div>}
           {!s.wtOk && <div style={{fontSize:11,color:"#60b4ff",marginBottom:3}}>💧 Deficyt wody {s.wt} — zbuduj wodociągi lub oczyszczalnię!</div>}
           {s.er<50 && <div style={{fontSize:11,color:"#ffd700"}}>💼 Zatrudnienie {s.er}% — za mało mieszkańców!</div>}
         </div>
@@ -42,10 +73,92 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         <div className="row"><span className="rl">Siła robocza</span><span className="rv" style={{color:"#a259ff"}}>{fa(s.workers)} os.</span></div>
         <div className="row"><span className="rl">Miejsca pracy</span><span className="rv" style={{color:"#ffd700"}}>{fa(s.jobs)}</span></div>
         <div className="row"><span className="rl">Zatrudnienie</span><span className="rv" style={{color:s.er>70?'#00e87a':s.er>40?'#ffd700':'#ff3d5a'}}>{s.er}%</span></div>
-        <div className="row"><span className="rl">Energia (saldo)</span><span className="rv" style={{color:s.pw<=0?'#00e87a':'#ff3d5a'}}>{s.pw>0?'+':''}{s.pw}</span></div>
+        <div className="row"><span className="rl">Energia</span><span className="rv" style={{color:powerBalanceColor}}>{power.ok?'OK':'DEFICYT'}</span></div>
         <div className="row"><span className="rl">Woda (saldo)</span><span className="rv" style={{color:s.wt<=0?'#00e87a':'#ff3d5a'}}>{s.wt>0?'+':''}{s.wt}</span></div>
         <div className="row"><span className="rl">Emisja CO₂</span><span className="rv" style={{color:s.co2<0?'#00e87a':s.co2<30?'#ffd700':'#ff3d5a'}}>{s.co2>0?'+':''}{s.co2}</span></div>
         <div className="row"><span className="rl">Pogoda</span><span className="rv">{G.weather?.icon} {G.weather?.name}</span></div>
+      </div>
+
+      {/* ENERGIA */}
+      <div className="panel" style={{border: `1px solid ${power.ok ? 'rgba(0,232,122,0.25)' : 'rgba(255,61,90,0.35)'}`}}>
+        <div className="ptitle" style={{color: power.ok ? '#00e87a' : '#ff9944'}}>⚡ SYSTEM ENERGII</div>
+
+        <div style={{
+          background: power.ok ? 'rgba(0,232,122,0.06)' : 'rgba(255,61,90,0.08)',
+          border: `1px solid ${power.ok ? 'rgba(0,232,122,0.18)' : 'rgba(255,61,90,0.25)'}`,
+          borderRadius: 9,
+          padding: 9,
+          marginBottom: 10,
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+            <span style={{fontSize:12,fontWeight:700,color:power.ok?'#00e87a':'#ff3d5a'}}>
+              {power.ok ? '✅ Energia stabilna' : '🚨 Deficyt energii'}
+            </span>
+            <span style={{fontSize:12,fontFamily:"monospace",fontWeight:800,color:powerBalanceColor}}>
+              {signedValue(power.balance)} j.
+            </span>
+          </div>
+
+          <div style={{height:7,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+            <div style={{
+              width:`${Math.min(100, power.demand > 0 ? Math.round((power.supply / power.demand) * 100) : 100)}%`,
+              height:"100%",
+              background:power.ok
+                ? "linear-gradient(90deg,#00e87a,#00ffcc)"
+                : "linear-gradient(90deg,#ffd700,#ff3d5a)",
+              transition:"width 0.3s ease",
+            }}/>
+          </div>
+        </div>
+
+        <div className="row"><span className="rl">Produkcja</span><span className="rv" style={{color:"#00e87a"}}>{fa(power.supply)} j.</span></div>
+        <div className="row"><span className="rl">Zużycie</span><span className="rv" style={{color:"#ff9944"}}>{fa(power.demand)} j.</span></div>
+        <div className="row"><span className="rl">Bilans</span><span className="rv" style={{color:powerBalanceColor}}>{signedValue(power.balance)} j.</span></div>
+        <div className="row"><span className="rl">Nadwyżka</span><span className="rv" style={{color:power.surplus>0?'#00e87a':'#3a5f82'}}>{fa(power.surplus)} j.</span></div>
+        <div className="row"><span className="rl">Deficyt</span><span className="rv" style={{color:power.deficit>0?'#ff3d5a':'#3a5f82'}}>{fa(power.deficit)} j.</span></div>
+        <div className="row"><span className="rl">Wydajność budynków zależnych od prądu</span><span className="rv" style={{color:power.efficiency>=90?'#00e87a':power.efficiency>=60?'#ffd700':'#ff3d5a'}}>{power.efficiency || 100}%</span></div>
+        <div className="row"><span className="rl">Skuteczność opłaty za prąd</span><span className="rv" style={{color:(power.feeEfficiency ?? 100)>=90?'#00e87a':(power.feeEfficiency ?? 100)>=60?'#ffd700':'#ff3d5a'}}>{power.feeEfficiency ?? 100}%</span></div>
+
+        <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{background:"rgba(0,232,122,0.06)",border:"1px solid rgba(0,232,122,0.18)",borderRadius:9,padding:8}}>
+            <div style={{fontSize:9,color:"#00e87a",fontWeight:800,marginBottom:4}}>TOP PRODUCENT</div>
+            {topProducer ? (
+              <>
+                <div style={{fontSize:12,fontWeight:700,color:"#c8dff5",marginBottom:2}}>{topProducer.icon} {topProducer.name}</div>
+                <div style={{fontSize:11,fontFamily:"monospace",color:"#00e87a"}}>+{fa(topProducer.value)} j.</div>
+              </>
+            ) : (
+              <div style={{fontSize:11,color:"#3a5f82"}}>Brak produkcji</div>
+            )}
+          </div>
+
+          <div style={{background:"rgba(255,153,68,0.06)",border:"1px solid rgba(255,153,68,0.18)",borderRadius:9,padding:8}}>
+            <div style={{fontSize:9,color:"#ff9944",fontWeight:800,marginBottom:4}}>TOP KONSUMENT</div>
+            {topConsumer ? (
+              <>
+                <div style={{fontSize:12,fontWeight:700,color:"#c8dff5",marginBottom:2}}>{topConsumer.icon} {topConsumer.name}</div>
+                <div style={{fontSize:11,fontFamily:"monospace",color:"#ff9944"}}>-{fa(topConsumer.value)} j.</div>
+              </>
+            ) : (
+              <div style={{fontSize:11,color:"#3a5f82"}}>Brak zużycia</div>
+            )}
+          </div>
+        </div>
+
+        {!power.ok && (
+          <div style={{
+            marginTop:10,
+            fontSize:10,
+            color:"#ff9944",
+            lineHeight:1.45,
+            background:"rgba(255,153,68,0.06)",
+            border:"1px solid rgba(255,153,68,0.18)",
+            borderRadius:8,
+            padding:8,
+          }}>
+            ⚠️ Brak energii obniża dochody budynków zależnych od prądu i zmniejsza realny dochód z opłaty za prąd.
+          </div>
+        )}
       </div>
 
       {/* PODATKI */}
@@ -66,12 +179,12 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
       <div className="panel">
         <div className="ptitle">💸 OPŁATY MIESZKAŃCÓW</div>
         <div style={{fontSize:10,color:"#6a90b8",marginBottom:10}}>
-          Generują dochód — zbyt wysokie (powyżej 5) obniżają zadowolenie.
+          Generują dochód — zbyt wysokie, szczególnie przy deficytach, obniżają zadowolenie.
         </div>
         {[
-          {id:"rent",    label:"🏠 Czynsz",           v:G.fees.rent,    inc:s.ri},
-          {id:"water",   label:"💧 Opłata za wodę",   v:G.fees.water,   inc:s.wi},
-          {id:"power",   label:"⚡ Opłata za prąd",   v:G.fees.power,   inc:s.pi},
+          {id:"rent",    label:"🏠 Czynsz",             v:G.fees.rent,    inc:s.ri},
+          {id:"water",   label:"💧 Opłata za wodę",     v:G.fees.water,   inc:s.wi},
+          {id:"power",   label:"⚡ Opłata za prąd",     v:G.fees.power,   inc:s.pi},
           {id:"transit", label:"🚌 Opłata za transport",v:G.fees.transit||0,inc:s.ti},
           {id:"sewage",  label:"🏗️ Opłata oczyszczalnia",v:G.fees.sewage||0,inc:s.si},
         ].map(f => (
