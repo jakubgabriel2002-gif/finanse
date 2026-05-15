@@ -1,18 +1,30 @@
 import React from 'react';
 import { BD, BT, BL } from '../data.js';
 import { nR, nT, fa, ft } from '../gameLogic.js';
+import {
+  SOLAR_UPGRADE_COST,
+  FILTER_UPGRADE_COST,
+  canInstallSolar,
+  canInstallFilter,
+} from '../game/buildingUpgrades.js';
 
 export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, onFilter }) {
   const b = G.selUID!=null ? G.buildings.find(x=>x.uid===G.selUID) : null;
   if(!b) return null;
+
   const d = BD[b.type];
   if(!d) return null;
+
   const now = Date.now()/1000;
   const act = G.buildings.filter(x=>!x.building);
   const hasR = d.nr || nR(b.x,b.y,G.roads) || nT(b.x,b.y,act);
   const upgCost = Math.floor(d.cost*b.lv*1.5);
-  const canSolar = !b.solar && d.pw>0 && !['solar','windmill','powerplant'].includes(b.type);
-  const canFilter = !b.co2f && d.co2>0 && ['factory','powerplant','office','hospital'].includes(b.type);
+
+  const solarCheck = canInstallSolar(b);
+  const filterCheck = canInstallFilter(b);
+
+  const canSolar = solarCheck.ok;
+  const canFilter = filterCheck.ok;
 
   return (
     <div id="sel-panel">
@@ -67,13 +79,14 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
       {canSolar && !b.building && (
         <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();onSolar();}}
           style={{marginTop:6,width:"100%",padding:8,border:"1px solid rgba(255,200,0,0.4)",borderRadius:8,background:"rgba(255,200,0,0.06)",color:"#ffd700",fontSize:11}}>
-          ☀️ Zainstaluj panele słoneczne (3000 zł)
+          ☀️ Zainstaluj panele słoneczne ({fa(SOLAR_UPGRADE_COST)} zł)
         </button>
       )}
+
       {canFilter && !b.building && (
         <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();onFilter();}}
           style={{marginTop:5,width:"100%",padding:8,border:"1px solid rgba(0,232,122,0.4)",borderRadius:8,background:"rgba(0,232,122,0.06)",color:"#00e87a",fontSize:11}}>
-          🌿 Zainstaluj filtr CO₂ (2000 zł)
+          🌿 Zainstaluj filtr CO₂ ({fa(FILTER_UPGRADE_COST)} zł)
         </button>
       )}
     </div>
