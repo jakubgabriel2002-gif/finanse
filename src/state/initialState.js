@@ -2,9 +2,6 @@ import { WEATHERS, TSTEPS } from '../data.js';
 
 export const SAVE_KEY = 'neocity_v7';
 
-// Budżet startowy: 90 000 zł
-// Koszt tutorialu: ratusz(3k) + 2x blok(10k) + dom(2k) + fabryka(8k) + szpital(12k) + drogi(~2k) = ~37k
-// Zostaje: ~50 000 zł po ukończeniu samouczka
 export const INIT_STATE = {
   budget: 90000,
   buildings: [],
@@ -73,8 +70,6 @@ function restoreTutorialBuildMode(save, roads) {
 
   if (save.buildMode) return save.buildMode;
 
-  // Stare zapisy mogły mieć tutStep = 1, ale buildMode = null.
-  // To blokowało tutorial na etapie dróg.
   if (step?.waitForRoads && roads.size < step.waitForRoads) {
     return 'road';
   }
@@ -126,10 +121,6 @@ export function prepareGameForSave(gameState) {
   return {
     ...gameState,
     roads: [...gameState.roads],
-
-    // Po tutorialu nie zapisujemy aktywnego trybu budowania.
-    // W trakcie tutoriala zapisujemy buildMode, bo inaczej po odświeżeniu
-    // gracz traci aktywną akcję tutoriala.
     buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
