@@ -18,7 +18,6 @@ import {
 import {
   shouldShowTutorial,
   startTutorialAction,
-  maybeAdvanceRoadTutorial,
   maybeAdvanceBuildingTutorial,
 } from './game/tutorialProgress.js';
 import Map from './components/Map.jsx';
@@ -62,7 +61,7 @@ export default function App() {
 
   useEffect(() => {
     setShowTut(shouldShowTutorial(G));
-  }, [G.tutDone, G.tutStep, G.buildMode]);
+  }, [G.tutDone, G.tutStep, G.buildMode, G.roads.size]);
 
   useEffect(() => {
     saveGame(G);
@@ -184,12 +183,13 @@ export default function App() {
         nr.add(key);
 
         const newLog=[{id:logIdRef.current++,label:"🛣️ Droga",amount:-ROAD_COST},...prev.log.slice(0,19)];
-        let next = recalc({...prev,roads:nr,budget:prev.budget-ROAD_COST,log:newLog});
 
-        const progress = maybeAdvanceRoadTutorial(next);
-        next = progress.gameState;
-
-        return next;
+        return recalc({
+          ...prev,
+          roads:nr,
+          budget:prev.budget-ROAD_COST,
+          log:newLog,
+        });
       }
 
       if(prev.buildMode) {
@@ -400,7 +400,6 @@ export default function App() {
     }
 
     setG(g=>startTutorialAction(g, step));
-    setShowTut(false);
   }, [notif]);
 
   const tutSkip = useCallback(() => {
@@ -523,7 +522,7 @@ export default function App() {
         ))}
       </div>
 
-      {showTut&&!G.tutDone&&<Tutorial step={G.tutStep} onAction={tutAction} onSkip={tutSkip}/>}
+      {showTut&&!G.tutDone&&<Tutorial step={G.tutStep} gameState={G} onAction={tutAction} onSkip={tutSkip}/>}
 
       {loanModal&&(
         <div className="modal-bg">
