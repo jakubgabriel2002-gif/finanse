@@ -15,6 +15,12 @@ import {
   applySolarUpgrade,
   applyFilterUpgrade,
 } from './game/buildingUpgrades.js';
+import {
+  shouldShowTutorial,
+  startTutorialAction,
+  maybeAdvanceRoadTutorial,
+  maybeAdvanceBuildingTutorial,
+} from './game/tutorialProgress.js';
 import Map from './components/Map.jsx';
 import TopBar from './components/TopBar.jsx';
 import BottomNav from './components/BottomNav.jsx';
@@ -55,11 +61,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if(!G.tutDone) setShowTut(true);
-  }, []);
+    setShowTut(shouldShowTutorial(G));
+  }, [G.tutDone, G.tutStep, G.buildMode]);
 
   useEffect(() => {
-    if(!G.tutDone) return;
     saveGame(G);
   }, [G]);
 
@@ -174,15 +179,24 @@ export default function App() {
         if(prev.grid[key]){notif("⚠️ Blokuje budynek!","warn");return prev;}
         if(ter[gy]?.[gx]===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
         if(prev.budget<ROAD_COST){notif("❌ Za mało środków!","err");return prev;}
-        const nr=new Set(prev.roads);nr.add(key);
+
+        const nr=new Set(prev.roads);
+        nr.add(key);
+
         const newLog=[{id:logIdRef.current++,label:"🛣️ Droga",amount:-ROAD_COST},...prev.log.slice(0,19)];
-        return recalc({...prev,roads:nr,budget:prev.budget-ROAD_COST,log:newLog});
+        let next = recalc({...prev,roads:nr,budget:prev.budget-ROAD_COST,log:newLog});
+
+        const progress = maybeAdvanceRoadTutorial(next);
+        next = progress.gameState;
+
+        return next;
       }
 
       if(prev.buildMode) {
         if(prev.roads.has(key)){notif("⚠️ Tu jest droga!","warn");return prev;}
         if(prev.grid[key]){notif("⚠️ Zajęte!","warn");return prev;}
         if(ter[gy]?.[gx]===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
+
         const d=BD[prev.buildMode];if(!d)return prev;
 
         if(prev.buildMode==='townhall'&&prev.buildings.some(b=>b.type==='townhall')){
@@ -197,26 +211,25 @@ export default function App() {
         }
 
         const now=Date.now()/1000;
-        const nb={uid:prev.nextUID,type:prev.buildMode,x:gx,y:gy,lv:1,building:true,buildEnd:now+BT[0],solar:false,co2f:false};
+        const builtType = prev.buildMode;
+        const nb={uid:prev.nextUID,type:builtType,x:gx,y:gy,lv:1,building:true,buildEnd:now+BT[0],solar:false,co2f:false};
         const buildings=[...prev.buildings,nb];
         const grid={...prev.grid,[key]:nb};
         const newLog=[{id:logIdRef.current++,label:`🏗️ ${d.n}`,amount:-d.cost},...prev.log.slice(0,19)];
 
         notif(`🏗️ ${d.e} ${d.n} · ${BL[0]}`,"ok");
 
-        let next=recalc({...prev,buildings,grid,budget:prev.budget-d.cost,nextUID:prev.nextUID+1,log:newLog});
+        let next = recalc({
+          ...prev,
+          buildings,
+          grid,
+          budget:prev.budget-d.cost,
+          nextUID:prev.nextUID+1,
+          log:newLog,
+        });
 
-        if(!next.tutDone) {
-          const step=TSTEPS[next.tutStep];
-          if(step?.req&&step.req.type===prev.buildMode) {
-            const cnt=buildings.filter(b=>b.type===prev.buildMode).length;
-            if(cnt>=step.req.n) {
-              next.buildMode=null;
-              next.tutStep=next.tutStep+1;
-              setTimeout(()=>setShowTut(true),400);
-            }
-          }
-        }
+        const progress = maybeAdvanceBuildingTutorial(next, builtType);
+        next = progress.gameState;
 
         return next;
       }
@@ -226,16 +239,6 @@ export default function App() {
     });
   }, [notif, recalc]);
 
-  useEffect(() => {
-    if(G.tutDone||G.tutStep!==1) return;
-    if(G.roads.size>=3) {
-      setTimeout(()=>{
-        setG(g=>({...g,tutStep:2,buildMode:null}));
-        setShowTut(true);
-      },500);
-    }
-  }, [G.tutDone, G.tutStep, G.roads.size]);
-
   const bldClick = useCallback((uid) => {
     setG(prev => prev.buildMode ? prev : {...prev,selUID:uid});
   }, []);
@@ -244,6 +247,7 @@ export default function App() {
     setG(prev => {
       const b=prev.buildings.find(x=>x.uid===prev.selUID);if(!b)return prev;
       const d=BD[b.type];
+
       if(b.lv>=d.ml){notif("⚠️ Max poziom!","warn");return prev;}
       if(b.building){notif("⚠️ Trwa budowa!","warn");return prev;}
 
@@ -389,18 +393,30 @@ export default function App() {
 
   const tutAction = useCallback((step) => {
     if(step.action==='finish') {
-      setG(g=>({...g,tutDone:true}));
+      setG(g=>startTutorialAction(g, step));
       setShowTut(false);
       notif("🏙️ Powodzenia, burmistrzu!","ok");
       return;
     }
 
-    setG(g=>({...g,buildMode:step.action}));
+    setG(g=>startTutorialAction(g, step));
     setShowTut(false);
   }, [notif]);
 
   const tutSkip = useCallback(() => {
-    setG(prev=>recalc({...prev,budget:80000,buildings:[],grid:{},roads:new Set(),tutDone:true,tutStep:TSTEPS.length,buildMode:null,nextUID:200,log:[{id:logIdRef.current++,label:"🏙️ Pominięto samouczek",amount:0}]}));
+    setG(prev=>recalc({
+      ...prev,
+      budget:80000,
+      buildings:[],
+      grid:{},
+      roads:new Set(),
+      tutDone:true,
+      tutStep:TSTEPS.length,
+      buildMode:null,
+      nextUID:200,
+      log:[{id:logIdRef.current++,label:"🏙️ Pominięto samouczek",amount:0}],
+    }));
+
     setShowTut(false);
     notif("🏙️ Pusta mapa, 80 000 zł. Powodzenia!","ok");
   }, [notif, recalc]);
