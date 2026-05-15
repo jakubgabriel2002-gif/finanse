@@ -30,6 +30,23 @@ import TownhallTab from './components/tabs/TownhallTab.jsx';
 import InboxTab from './components/tabs/InboxTab.jsx';
 import StatsTab from './components/tabs/StatsTab.jsx';
 
+function getCenteredCamera(gameState, mapEl) {
+  const size = GS(gameState.thLv);
+  const width = mapEl?.clientWidth || window.innerWidth;
+  const height = mapEl?.clientHeight || Math.max(1, window.innerHeight - 122);
+  const zoom = 1;
+
+  const townhall = gameState.buildings?.find(b => b.type === 'townhall');
+  const targetX = townhall ? townhall.x + 0.5 : size / 2;
+  const targetY = townhall ? townhall.y + 0.5 : size / 2;
+
+  return {
+    x: width / 2 - targetX * TILE * zoom,
+    y: height / 2 - targetY * TILE * zoom,
+    zoom,
+  };
+}
+
 export default function App() {
   const [G, setG] = useState(() => loadGame() || createInitialGameState());
   const [cam, setCam] = useState({x:0,y:0,zoom:1.0});
@@ -44,12 +61,20 @@ export default function App() {
   const logIdRef = useRef(100);
   const notifIdRef = useRef(0);
 
+  const centerMap = useCallback((gameState = G) => {
+    requestAnimationFrame(() => {
+      setCam(getCenteredCamera(gameState, mapViewRef.current));
+    });
+  }, [G]);
+
   useEffect(() => {
-    const sz = GS(G.thLv);
-    const W = window.innerWidth;
-    const H = window.innerHeight - 52 - 70;
-    setCam({x:W/2-(sz*TILE)/2, y:H/2-(sz*TILE)/2, zoom:1.0});
+    centerMap(G);
   }, []);
+
+  useEffect(() => {
+    if(G.tab !== 'map') return;
+    centerMap(G);
+  }, [G.tab]);
 
   useEffect(() => {
     setG(g => {
@@ -368,9 +393,7 @@ export default function App() {
     const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather);
 
     setG({...fresh,stats,inbox:genInbox({...fresh,stats})});
-
-    const W=window.innerWidth,H=window.innerHeight-52-70;
-    setCam({x:W/2-(GS(1)*TILE)/2,y:H/2-(GS(1)*TILE)/2,zoom:1.0});
+    setCam(getCenteredCamera(fresh, mapViewRef.current));
 
     setShowTut(true);
     notif("🔄 Gra zresetowana!","warn");
@@ -450,7 +473,7 @@ export default function App() {
   const onTouchEnd = useCallback(()=>{pinchRef.current=null;touchRef.current=null;},[]);
   const onWheel = useCallback((e)=>{e.preventDefault();setCam(c=>({...c,zoom:Math.max(0.3,Math.min(2.5,c.zoom-e.deltaY*0.001))}));},[]);
   const zoom = useCallback((dz)=>{setCam(c=>({...c,zoom:Math.max(0.3,Math.min(2.5,c.zoom+dz))}));},[]);
-  const resetCam = useCallback(()=>{const sz=GS(G.thLv),W=window.innerWidth,H=window.innerHeight-52-70;setCam({x:W/2-(sz*TILE)/2,y:H/2-(sz*TILE)/2,zoom:1.0});},[G.thLv]);
+  const resetCam = useCallback(()=>{centerMap(G);},[G, centerMap]);
 
   const unread = G.inbox?.filter(m=>!m.read).length || 0;
 
@@ -467,7 +490,7 @@ export default function App() {
             {G.buildMode && (
               <div id="build-banner" style={{background:G.buildMode==='road'?'rgba(180,120,0,0.97)':'rgba(0,100,180,0.97)'}}>
                 <span>{G.buildMode==='road'?'🛣️ Kliknij kafelek (200zł)':`${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}</span>
-                <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();setG(g=>({...g,buildMode:null}));}}
+                <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();setG(g=>({...g,buildMode:null}));centerMap(G);}}
                   style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:6,color:"#fff",fontSize:13,padding:"2px 10px",fontWeight:700}}>
                   ✕ Anuluj
                 </button>
