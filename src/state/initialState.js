@@ -1,4 +1,4 @@
-import { WEATHERS } from '../data.js';
+import { WEATHERS, TSTEPS } from '../data.js';
 
 export const SAVE_KEY = 'neocity_v7';
 
@@ -65,15 +65,34 @@ export function createInitialGameState(overrides = {}) {
   };
 }
 
+function restoreTutorialBuildMode(save, roads) {
+  if (!save || save.tutDone) return null;
+
+  const tutStep = Number.isFinite(save.tutStep) ? save.tutStep : 0;
+  const step = TSTEPS[tutStep];
+
+  if (save.buildMode) return save.buildMode;
+
+  // Stare zapisy mogły mieć tutStep = 1, ale buildMode = null.
+  // To blokowało tutorial na etapie dróg.
+  if (step?.waitForRoads && roads.size < step.waitForRoads) {
+    return 'road';
+  }
+
+  return null;
+}
+
 export function normalizeLoadedGameState(save) {
   const base = createInitialGameState();
+  const roads = new Set(Array.isArray(save?.roads) ? save.roads : []);
+  const buildMode = restoreTutorialBuildMode(save, roads);
 
   return {
     ...base,
     ...save,
-    roads: new Set(Array.isArray(save?.roads) ? save.roads : []),
+    roads,
     weather: save?.weather || WEATHERS[0],
-    buildMode: null,
+    buildMode,
     buildings: Array.isArray(save?.buildings) ? save.buildings : [],
     grid: save?.grid || {},
     log: Array.isArray(save?.log) ? save.log : base.log,
@@ -107,7 +126,11 @@ export function prepareGameForSave(gameState) {
   return {
     ...gameState,
     roads: [...gameState.roads],
-    buildMode: null,
+
+    // Po tutorialu nie zapisujemy aktywnego trybu budowania.
+    // W trakcie tutoriala zapisujemy buildMode, bo inaczej po odświeżeniu
+    // gracz traci aktywną akcję tutoriala.
+    buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
 
