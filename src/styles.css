@@ -3,6 +3,7 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --topbar-base: 52px;
   --bottomnav-base: 70px;
+  --map-top-gap: 10px;
   --topbar-total: calc(var(--topbar-base) + var(--safe-top));
   --bottomnav-total: calc(var(--bottomnav-base) + var(--safe-bottom));
 }
@@ -37,7 +38,6 @@ body,html,#root{
   background:#080c14;
 }
 
-/* TOPBAR — fixed, niezależny od scrolla zakładek */
 #topbar{
   position:fixed;
   top:0;
@@ -52,7 +52,7 @@ body,html,#root{
   gap:4px;
   overflow-x:auto;
   overflow-y:hidden;
-  z-index:100;
+  z-index:500;
   overscroll-behavior-x:contain;
   -webkit-overflow-scrolling:touch;
 }
@@ -123,20 +123,18 @@ body,html,#root{
   font-size:10px;
 }
 
-/* MAIN — fixed między topbarem i bottomnavem */
+/* MAIN — lekko niżej, żeby mapa nie była przycinana przez topbar/safe-area */
 #main{
   position:fixed;
-  top:var(--topbar-total);
+  top:calc(var(--topbar-total) + var(--map-top-gap));
   left:0;
   right:0;
   bottom:var(--bottomnav-total);
   overflow:hidden;
   background:#0a1018;
   z-index:1;
-  contain:layout paint size;
 }
 
-/* MAPA — nie może być scrollowana jak zwykła strona */
 #map-view{
   position:absolute;
   inset:0;
@@ -144,13 +142,13 @@ body,html,#root{
   background:#0a1018;
   touch-action:none;
   overscroll-behavior:none;
-  contain:layout paint size;
 }
 
 #map-container{
   position:absolute;
   touch-action:none;
   will-change:left,top,width,height;
+  z-index:1;
 }
 
 .tile{
@@ -256,9 +254,10 @@ body,html,#root{
   pointer-events:none;
 }
 
+/* Build banner niżej i zawsze ponad mapą */
 #build-banner{
   position:absolute;
-  top:10px;
+  top:18px;
   left:50%;
   transform:translateX(-50%);
   border-radius:10px;
@@ -266,23 +265,25 @@ body,html,#root{
   font-size:12px;
   font-weight:700;
   color:#fff;
-  z-index:200;
+  z-index:800;
   display:flex;
   align-items:center;
   gap:10px;
   white-space:nowrap;
   box-shadow:0 4px 16px rgba(0,0,0,0.5);
+  pointer-events:auto;
 }
 
 #ev-popup{
   position:absolute;
-  top:60px;
+  top:70px;
   left:50%;
   transform:translateX(-50%);
   width:min(300px,calc(100vw - 20px));
   border-radius:12px;
   padding:12px 14px;
-  z-index:150;
+  z-index:700;
+  pointer-events:auto;
 }
 
 #sel-panel{
@@ -295,32 +296,37 @@ body,html,#root{
   border:1px solid rgba(0,180,255,0.3);
   border-radius:12px;
   padding:12px 14px;
-  z-index:50;
+  z-index:750;
   box-shadow:0 8px 32px rgba(0,0,0,0.7);
+  pointer-events:auto;
 }
 
+/* Przyciski mapy niżej i wyżej w warstwach */
 #zoom-btns{
   position:absolute;
   right:10px;
-  top:10px;
+  top:64px;
   display:flex;
   flex-direction:column;
   gap:4px;
-  z-index:40;
+  z-index:850;
+  pointer-events:auto;
 }
 
 .zoom-btn{
-  width:32px;
-  height:32px;
-  background:rgba(8,14,26,0.9);
-  border:1px solid rgba(0,180,255,0.3);
-  border-radius:6px;
+  width:34px;
+  height:34px;
+  background:rgba(8,14,26,0.96);
+  border:1px solid rgba(0,180,255,0.4);
+  border-radius:7px;
   color:#00b4ff;
   cursor:pointer;
   font-size:16px;
   display:flex;
   align-items:center;
   justify-content:center;
+  box-shadow:0 4px 14px rgba(0,0,0,0.45);
+  pointer-events:auto;
 }
 
 #riot-overlay{
@@ -335,7 +341,6 @@ body,html,#root{
   font-size:48px;
 }
 
-/* ZAKŁADKI — scroll tylko tutaj, nie na body / app */
 #tab-content{
   position:absolute;
   inset:0;
@@ -491,7 +496,6 @@ body,html,#root{
   margin-bottom:6px;
 }
 
-/* BOTTOM NAV — fixed, niezależny od scrolla */
 #bottomnav{
   position:fixed;
   left:0;
@@ -504,7 +508,7 @@ body,html,#root{
   align-items:flex-start;
   justify-content:space-around;
   padding:0 4px var(--safe-bottom) 4px;
-  z-index:100;
+  z-index:500;
 }
 
 .nbtn{
@@ -558,7 +562,7 @@ body,html,#root{
   top:calc(58px + var(--safe-top));
   left:50%;
   transform:translateX(-50%);
-  z-index:300;
+  z-index:900;
   display:flex;
   flex-direction:column;
   gap:5px;
@@ -591,7 +595,7 @@ body,html,#root{
   position:fixed;
   inset:0;
   background:rgba(0,0,0,0.82);
-  z-index:400;
+  z-index:950;
   display:flex;
   align-items:flex-end;
   justify-content:center;
@@ -633,7 +637,7 @@ body,html,#root{
   position:fixed;
   inset:0;
   background:rgba(0,0,0,0.7);
-  z-index:500;
+  z-index:1000;
   display:flex;
   align-items:center;
   justify-content:center;
