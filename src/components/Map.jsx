@@ -137,11 +137,11 @@ function getPowerStatusForBuilding(building, activePowerLines) {
     : 'disconnected';
 }
 
-export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
+export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
   const tpx = TILE * cam.zoom;
   const sz = GS(G.thLv);
   const ter = TR[sz] || TR[24];
-  const now = Date.now() / 1000;
+  const currentTime = Number.isFinite(now) ? now : Date.now() / 1000;
   const act = G.buildings.filter(b => !b.building);
   const powerLines = G.powerLines || new Set();
   const activePowerLines = getSourceConnectedPowerLines(powerLines, act);
@@ -365,7 +365,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
           tpx={tpx}
           isSel={isSel}
           hasRoad={hasR}
-          now={now}
+          now={currentTime}
           powerStatus={powerStatus}
           showPowerStatus={showPowerStatus}
         />
