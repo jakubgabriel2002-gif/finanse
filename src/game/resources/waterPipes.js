@@ -1,9 +1,17 @@
 export const WATERPIPE_COST = 120;
 export const WATERPIPE_RANGE = 3;
 
-export const WATER_SOURCE_TYPES = [
+export const WATER_SUPPLY_SOURCE_TYPES = [
   'waterplant',
+];
+
+export const SEWAGE_SOURCE_TYPES = [
   'sewage',
+];
+
+export const WATER_SOURCE_TYPES = [
+  ...WATER_SUPPLY_SOURCE_TYPES,
+  ...SEWAGE_SOURCE_TYPES,
 ];
 
 export function keyOf(x, y) {
@@ -21,6 +29,14 @@ export function distance(a, b) {
 
 export function isWaterSourceBuilding(building) {
   return WATER_SOURCE_TYPES.includes(building?.type) && !building.building;
+}
+
+export function isWaterSupplySourceBuilding(building) {
+  return WATER_SUPPLY_SOURCE_TYPES.includes(building?.type) && !building.building;
+}
+
+export function isSewageSourceBuilding(building) {
+  return SEWAGE_SOURCE_TYPES.includes(building?.type) && !building.building;
 }
 
 export function isNearWaterSource(x, y, buildings) {
@@ -98,9 +114,11 @@ function getNeighborKeys(x, y) {
   ];
 }
 
-export function getSourceConnectedWaterPipes(waterPipes, buildings) {
+export function getConnectedWaterPipesBySourceTypes(waterPipes, buildings, sourceTypes) {
   const allPipes = new Set(waterPipes || []);
-  const activeSources = buildings.filter(isWaterSourceBuilding);
+  const activeSources = buildings.filter(building =>
+    sourceTypes.includes(building?.type) && !building.building
+  );
 
   if (!allPipes.size || !activeSources.length) {
     return new Set();
@@ -133,6 +151,20 @@ export function getSourceConnectedWaterPipes(waterPipes, buildings) {
   }
 
   return connected;
+}
+
+// Używane przez mapę/UX — pokazuje rury aktywne, jeśli są podłączone
+// do wodociągów albo oczyszczalni.
+export function getSourceConnectedWaterPipes(waterPipes, buildings) {
+  return getConnectedWaterPipesBySourceTypes(waterPipes, buildings, WATER_SOURCE_TYPES);
+}
+
+export function getWaterSupplyConnectedPipes(waterPipes, buildings) {
+  return getConnectedWaterPipesBySourceTypes(waterPipes, buildings, WATER_SUPPLY_SOURCE_TYPES);
+}
+
+export function getSewageConnectedPipes(waterPipes, buildings) {
+  return getConnectedWaterPipesBySourceTypes(waterPipes, buildings, SEWAGE_SOURCE_TYPES);
 }
 
 export function isInConnectedWaterPipeRange(x, y, waterPipes, buildings) {
