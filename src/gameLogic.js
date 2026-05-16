@@ -76,7 +76,7 @@ function getWaterMultiplier(water) {
   if (!water || water.totalDemand <= 0) return 1;
   if (water.ok) return 1;
 
-  return Math.max(0.3, (water.serviceEfficiency || 0) / 100);
+  return Math.max(0.35, (water.serviceEfficiency || 0) / 100);
 }
 
 function getWaterFeeMultiplier(water) {
@@ -90,7 +90,7 @@ function getSewageMultiplier(sewage) {
   if (!sewage || sewage.totalLoad <= 0) return 1;
   if (sewage.ok) return 1;
 
-  return Math.max(0.55, (sewage.serviceEfficiency || 0) / 100);
+  return Math.max(0.6, (sewage.serviceEfficiency || 0) / 100);
 }
 
 function getSewageFeeMultiplier(sewage) {
@@ -295,9 +295,9 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
   }
 
   if(water.gridDeficit > 0) {
-    h.housing = (h.housing||0) - Math.floor(water.gridDeficit / 4);
-    h.services = (h.services||0) - Math.floor(water.gridDeficit / 7);
-    h.env = (h.env||0) - Math.floor(water.gridDeficit / 12);
+    h.housing = (h.housing||0) - Math.floor(water.gridDeficit / 5);
+    h.services = (h.services||0) - Math.floor(water.gridDeficit / 8);
+    h.env = (h.env||0) - Math.floor(water.gridDeficit / 15);
   }
 
   if(water.disconnectedCount > 0) {
@@ -306,14 +306,10 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     h.env = (h.env||0) - Math.ceil(water.disconnectedCount / 2);
   }
 
-  if(water.inactiveWaterPipeCount > 0) {
-    h.services = (h.services||0) - Math.ceil(water.inactiveWaterPipeCount / 4);
-  }
-
   if(sewage.treatmentDeficit > 0) {
-    h.env = (h.env||0) - Math.floor(sewage.treatmentDeficit / 4);
-    h.services = (h.services||0) - Math.floor(sewage.treatmentDeficit / 8);
-    co2 += Math.floor(sewage.treatmentDeficit / 3);
+    h.env = (h.env||0) - Math.floor(sewage.treatmentDeficit / 6);
+    h.services = (h.services||0) - Math.floor(sewage.treatmentDeficit / 10);
+    co2 += Math.floor(sewage.treatmentDeficit / 4);
   }
 
   if(sewage.disconnectedCount > 0) {
@@ -326,8 +322,8 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
   const wt = water.legacyWt;
   const sw = sewage.legacySewage;
 
-  if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 5);
-  if(sw > 0) h.env = (h.env||0) - Math.floor(sw / 5);
+  if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 7);
+  if(sw > 0) h.env = (h.env||0) - Math.floor(sw / 7);
 
   exp += loan ? Math.floor(loan.amt * loan.rate / 12) : 0;
 
@@ -425,17 +421,6 @@ export function genInbox(G) {
       from:"Mieszkańcy",
       sub:"Płacimy za niestabilny prąd",
       body:`Opłata za prąd działa tylko na ${s.power?.feeEfficiency || 0}%. Realny dochód: ${fa(s.pi)} zł zamiast ${fa(s.piBase || 0)} zł/mie.`,
-      pri:"med",
-      read:false
-    });
-
-  if(s.water?.inactiveWaterPipeCount > 0)
-    msgs.push({
-      id:"wtinactive",
-      icon:"💧",
-      from:"Wodociągi miejskie",
-      sub:"Nieaktywne rury wodne",
-      body:`Masz ${s.water.inactiveWaterPipeCount} kaf. rur, które nie są połączone z wodociągami. Takie rury nie dostarczają czystej wody.`,
       pri:"med",
       read:false
     });
