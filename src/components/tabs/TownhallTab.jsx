@@ -5,15 +5,25 @@ import { fa, fm } from '../../gameLogic.js';
 function getPowerData(s) {
   return s.power || {
     demand: Math.max(0, s.pw || 0),
+    connectedDemand: Math.max(0, s.pw || 0),
+    disconnectedDemand: 0,
+    totalDemand: Math.max(0, s.pw || 0),
     supply: Math.max(0, -(s.pw || 0)),
     balance: -(s.pw || 0),
+    gridDeficit: Math.max(0, s.pw || 0),
     deficit: Math.max(0, s.pw || 0),
     surplus: Math.max(0, -(s.pw || 0)),
     ok: s.pwOk,
     efficiency: s.pwOk ? 100 : 35,
     feeEfficiency: s.pwOk ? 100 : 0,
+    networkCoverage: 100,
+    supplyCoverage: s.pwOk ? 100 : 0,
+    serviceEfficiency: s.pwOk ? 100 : 35,
+    disconnectedCount: 0,
     consumers: [],
     producers: [],
+    nodes: [],
+    disconnectedConsumers: [],
   };
 }
 
@@ -36,7 +46,7 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
   const power = getPowerData(s);
   const topProducer = topByValue(power.producers);
   const topConsumer = topByValue(power.consumers);
-  const powerBalanceColor = power.balance >= 0 ? '#00e87a' : '#ff3d5a';
+  const powerBalanceColor = power.ok ? '#00e87a' : '#ff3d5a';
 
   return (
     <div className="inner">
@@ -45,17 +55,16 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         <span style={{fontSize:10,color:"#3a5f82",fontFamily:"monospace"}}>Lv{G.thLv}·{GS(G.thLv)}×{GS(G.thLv)}·🗳️{G.elTmr}m</span>
       </div>
 
-      {/* ALERTS */}
       {(!s.pwOk||!s.wtOk||s.er<50) && (
         <div style={{background:"rgba(255,61,90,0.08)",border:"1px solid rgba(255,61,90,0.3)",borderRadius:10,padding:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:"#ff3d5a",marginBottom:6}}>🚨 PILNE PROBLEMY</div>
-          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Deficyt energii {fa(power.deficit)} j. — zbuduj elektrownię, farmę solarną albo wiatrak!</div>}
+          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Problem energii {fa(power.deficit)} j. — zbuduj źródło prądu albo podstację!</div>}
+          {power.disconnectedCount > 0 && <div style={{fontSize:11,color:"#ffd700",marginBottom:3}}>🔌 {power.disconnectedCount} bud. poza zasięgiem sieci — postaw podstację bliżej dzielnicy.</div>}
           {!s.wtOk && <div style={{fontSize:11,color:"#60b4ff",marginBottom:3}}>💧 Deficyt wody {s.wt} — zbuduj wodociągi lub oczyszczalnię!</div>}
           {s.er<50 && <div style={{fontSize:11,color:"#ffd700"}}>💼 Zatrudnienie {s.er}% — za mało mieszkańców!</div>}
         </div>
       )}
 
-      {/* BILANS */}
       <div className="panel">
         <div className="ptitle">📊 BILANS MIESIĘCZNY</div>
         <div className="row"><span className="rl">Przychód z budynków</span><span className="rv" style={{color:"#00e87a"}}>+{fa(s.inc - s.feeInc)} zł</span></div>
@@ -66,20 +75,18 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         <div className="row"><span className="rl">Bilans netto</span><span className="rv" style={{color:s.net>=0?'#00e87a':'#ff3d5a'}}>{fm(s.net)} zł</span></div>
       </div>
 
-      {/* MIASTO */}
       <div className="panel">
         <div className="ptitle">🏙️ MIASTO</div>
         <div className="row"><span className="rl">Populacja</span><span className="rv" style={{color:"#00b4ff"}}>{fa(s.pop)} os.</span></div>
         <div className="row"><span className="rl">Siła robocza</span><span className="rv" style={{color:"#a259ff"}}>{fa(s.workers)} os.</span></div>
         <div className="row"><span className="rl">Miejsca pracy</span><span className="rv" style={{color:"#ffd700"}}>{fa(s.jobs)}</span></div>
         <div className="row"><span className="rl">Zatrudnienie</span><span className="rv" style={{color:s.er>70?'#00e87a':s.er>40?'#ffd700':'#ff3d5a'}}>{s.er}%</span></div>
-        <div className="row"><span className="rl">Energia</span><span className="rv" style={{color:powerBalanceColor}}>{power.ok?'OK':'DEFICYT'}</span></div>
+        <div className="row"><span className="rl">Energia</span><span className="rv" style={{color:powerBalanceColor}}>{power.ok?'OK':'PROBLEM'}</span></div>
         <div className="row"><span className="rl">Woda (saldo)</span><span className="rv" style={{color:s.wt<=0?'#00e87a':'#ff3d5a'}}>{s.wt>0?'+':''}{s.wt}</span></div>
         <div className="row"><span className="rl">Emisja CO₂</span><span className="rv" style={{color:s.co2<0?'#00e87a':s.co2<30?'#ffd700':'#ff3d5a'}}>{s.co2>0?'+':''}{s.co2}</span></div>
         <div className="row"><span className="rl">Pogoda</span><span className="rv">{G.weather?.icon} {G.weather?.name}</span></div>
       </div>
 
-      {/* ENERGIA */}
       <div className="panel" style={{border: `1px solid ${power.ok ? 'rgba(0,232,122,0.25)' : 'rgba(255,61,90,0.35)'}`}}>
         <div className="ptitle" style={{color: power.ok ? '#00e87a' : '#ff9944'}}>⚡ SYSTEM ENERGII</div>
 
@@ -92,7 +99,7 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         }}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
             <span style={{fontSize:12,fontWeight:700,color:power.ok?'#00e87a':'#ff3d5a'}}>
-              {power.ok ? '✅ Energia stabilna' : '🚨 Deficyt energii'}
+              {power.ok ? '✅ Energia stabilna' : '🚨 Problem z energią'}
             </span>
             <span style={{fontSize:12,fontFamily:"monospace",fontWeight:800,color:powerBalanceColor}}>
               {signedValue(power.balance)} j.
@@ -101,7 +108,7 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
 
           <div style={{height:7,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
             <div style={{
-              width:`${Math.min(100, power.demand > 0 ? Math.round((power.supply / power.demand) * 100) : 100)}%`,
+              width:`${Math.min(100, power.serviceEfficiency ?? 100)}%`,
               height:"100%",
               background:power.ok
                 ? "linear-gradient(90deg,#00e87a,#00ffcc)"
@@ -112,11 +119,19 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         </div>
 
         <div className="row"><span className="rl">Produkcja</span><span className="rv" style={{color:"#00e87a"}}>{fa(power.supply)} j.</span></div>
-        <div className="row"><span className="rl">Zużycie</span><span className="rv" style={{color:"#ff9944"}}>{fa(power.demand)} j.</span></div>
-        <div className="row"><span className="rl">Bilans</span><span className="rv" style={{color:powerBalanceColor}}>{signedValue(power.balance)} j.</span></div>
+        <div className="row"><span className="rl">Zużycie podłączone</span><span className="rv" style={{color:"#ff9944"}}>{fa(power.connectedDemand)} j.</span></div>
+        <div className="row"><span className="rl">Zużycie poza siecią</span><span className="rv" style={{color:power.disconnectedDemand>0?'#ff3d5a':'#3a5f82'}}>{fa(power.disconnectedDemand)} j.</span></div>
+        <div className="row"><span className="rl">Zapotrzebowanie łączne</span><span className="rv" style={{color:"#ffd700"}}>{fa(power.totalDemand)} j.</span></div>
+        <div className="row"><span className="rl">Bilans sieci</span><span className="rv" style={{color:powerBalanceColor}}>{signedValue(power.balance)} j.</span></div>
+        <div className="row"><span className="rl">Deficyt produkcji</span><span className="rv" style={{color:power.gridDeficit>0?'#ff3d5a':'#3a5f82'}}>{fa(power.gridDeficit)} j.</span></div>
+        <div className="row"><span className="rl">Deficyt całkowity</span><span className="rv" style={{color:power.deficit>0?'#ff3d5a':'#3a5f82'}}>{fa(power.deficit)} j.</span></div>
         <div className="row"><span className="rl">Nadwyżka</span><span className="rv" style={{color:power.surplus>0?'#00e87a':'#3a5f82'}}>{fa(power.surplus)} j.</span></div>
-        <div className="row"><span className="rl">Deficyt</span><span className="rv" style={{color:power.deficit>0?'#ff3d5a':'#3a5f82'}}>{fa(power.deficit)} j.</span></div>
-        <div className="row"><span className="rl">Wydajność budynków zależnych od prądu</span><span className="rv" style={{color:power.efficiency>=90?'#00e87a':power.efficiency>=60?'#ffd700':'#ff3d5a'}}>{power.efficiency || 100}%</span></div>
+
+        <div className="row"><span className="rl">Zasięg sieci</span><span className="rv" style={{color:power.networkCoverage>=90?'#00e87a':power.networkCoverage>=60?'#ffd700':'#ff3d5a'}}>{power.networkCoverage ?? 100}%</span></div>
+        <div className="row"><span className="rl">Pokrycie produkcji</span><span className="rv" style={{color:power.supplyCoverage>=90?'#00e87a':power.supplyCoverage>=60?'#ffd700':'#ff3d5a'}}>{power.supplyCoverage ?? 100}%</span></div>
+        <div className="row"><span className="rl">Wydajność systemu</span><span className="rv" style={{color:power.serviceEfficiency>=90?'#00e87a':power.serviceEfficiency>=60?'#ffd700':'#ff3d5a'}}>{power.serviceEfficiency ?? 100}%</span></div>
+        <div className="row"><span className="rl">Budynki poza siecią</span><span className="rv" style={{color:power.disconnectedCount>0?'#ff3d5a':'#00e87a'}}>{power.disconnectedCount || 0}</span></div>
+        <div className="row"><span className="rl">Punkty sieci</span><span className="rv" style={{color:"#00b4ff"}}>{power.nodes?.length || 0}</span></div>
         <div className="row"><span className="rl">Skuteczność opłaty za prąd</span><span className="rv" style={{color:(power.feeEfficiency ?? 100)>=90?'#00e87a':(power.feeEfficiency ?? 100)>=60?'#ffd700':'#ff3d5a'}}>{power.feeEfficiency ?? 100}%</span></div>
 
         <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -145,6 +160,23 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
           </div>
         </div>
 
+        {power.disconnectedConsumers?.length > 0 && (
+          <div style={{
+            marginTop:10,
+            fontSize:10,
+            color:"#ff9944",
+            lineHeight:1.45,
+            background:"rgba(255,153,68,0.06)",
+            border:"1px solid rgba(255,153,68,0.18)",
+            borderRadius:8,
+            padding:8,
+          }}>
+            🔌 Poza siecią: {power.disconnectedConsumers.slice(0,4).map(b => `${b.icon} ${b.name}`).join(', ')}
+            {power.disconnectedConsumers.length > 4 ? ` +${power.disconnectedConsumers.length - 4} więcej` : ''}.
+            Postaw podstację bliżej tych budynków.
+          </div>
+        )}
+
         {!power.ok && (
           <div style={{
             marginTop:10,
@@ -156,12 +188,11 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
             borderRadius:8,
             padding:8,
           }}>
-            ⚠️ Brak energii obniża dochody budynków zależnych od prądu i zmniejsza realny dochód z opłaty za prąd.
+            ⚠️ Brak energii albo brak zasięgu sieci obniża dochody budynków zależnych od prądu i zmniejsza realny dochód z opłaty za prąd.
           </div>
         )}
       </div>
 
-      {/* PODATKI */}
       <div className="panel">
         <div className="ptitle">💰 PODATKI</div>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}>
@@ -175,7 +206,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         </div>
       </div>
 
-      {/* OPŁATY MIESZKAŃCÓW */}
       <div className="panel">
         <div className="ptitle">💸 OPŁATY MIESZKAŃCÓW</div>
         <div style={{fontSize:10,color:"#6a90b8",marginBottom:10}}>
@@ -204,7 +234,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         </div>
       </div>
 
-      {/* POLITYKI */}
       <div className="panel">
         <div className="ptitle">📋 POLITYKI</div>
         {POLICIES.map(p => (
@@ -222,7 +251,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         ))}
       </div>
 
-      {/* KONTROLA SKARBOWA */}
       <div className="panel">
         <div className="ptitle">🔍 KONTROLA SKARBOWA</div>
         <div style={{fontSize:11,color:"#6a90b8",marginBottom:8}}>
@@ -237,7 +265,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         </button>
       </div>
 
-      {/* BANK */}
       <div className="panel">
         <div className="ptitle">🏦 BANK MIEJSKI</div>
         {G.loan ? (
@@ -265,7 +292,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         )}
       </div>
 
-      {/* OSTATNIE WYDARZENIA */}
       {G.events.length > 0 && (
         <div className="panel">
           <div className="ptitle">📰 OSTATNIE WYDARZENIA</div>
@@ -279,7 +305,6 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         </div>
       )}
 
-      {/* RESET GRY — tymczasowy, do usunięcia przed release */}
       <div className="panel" style={{border:"1px solid rgba(255,61,90,0.3)",background:"rgba(255,61,90,0.04)"}}>
         <div className="ptitle" style={{color:"#ff3d5a"}}>⚠️ RESET GRY (tymczasowe)</div>
         <div style={{fontSize:11,color:"#6a90b8",marginBottom:8}}>
