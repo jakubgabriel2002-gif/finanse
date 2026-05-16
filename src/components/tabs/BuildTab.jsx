@@ -71,7 +71,7 @@ export default function BuildTab({ G, onPick }) {
       </div>
 
       <div className={`bcard ${G.buildMode==='waterpipe'?'act':''}`}
-        style={{borderColor:"rgba(0,150,255,0.35)",marginBottom:12}}
+        style={{borderColor:"rgba(0,150,255,0.35)",marginBottom:6}}
         onClick={() => onPick('waterpipe')}>
         <span style={{fontSize:22}}>💧</span>
         <div style={{flex:1}}>
@@ -83,6 +83,37 @@ export default function BuildTab({ G, onPick }) {
           </div>
         </div>
         <span style={{fontSize:18,color:"#60b4ff"}}>→</span>
+      </div>
+
+      <div className={`bcard ${G.buildMode==='smog'?'act':''}`}
+        style={{
+          borderColor:G.smogScanUnlocked ? "rgba(255,153,68,0.35)" : "rgba(255,61,90,0.25)",
+          marginBottom:12,
+          opacity:G.smogScanUnlocked ? 1 : 0.72,
+        }}
+        onClick={() => onPick('smog')}>
+        <span style={{fontSize:22}}>{G.smogScanUnlocked ? '🌫️' : '🔒'}</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600}}>
+            {G.smogScanUnlocked ? 'Tryb smogu' : 'Tryb smogu zablokowany'}
+          </div>
+          <div style={{display:"flex",gap:5,marginTop:3,flexWrap:"wrap"}}>
+            {G.smogScanUnlocked ? (
+              <>
+                <span className="tag" style={{background:"rgba(255,153,68,0.13)",color:"#ff9944"}}>emisje CO₂</span>
+                <span className="tag" style={{background:"rgba(0,232,122,0.1)",color:"#00e87a"}}>podgląd mapy</span>
+              </>
+            ) : (
+              <>
+                <span className="tag" style={{background:"rgba(255,61,90,0.12)",color:"#ff3d5a"}}>kup w Ratuszu</span>
+                <span className="tag" style={{background:"rgba(255,215,0,0.12)",color:"#ffd700"}}>monitoring</span>
+              </>
+            )}
+          </div>
+        </div>
+        <span style={{fontSize:18,color:G.smogScanUnlocked ? "#ff9944" : "#ff3d5a"}}>
+          {G.smogScanUnlocked ? '→' : '🔒'}
+        </span>
       </div>
 
       {cats.map(cat => {
