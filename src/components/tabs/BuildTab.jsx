@@ -4,6 +4,34 @@ import { fa } from '../../gameLogic.js';
 import { POWERLINE_COST, POWERLINE_RANGE } from '../../game/resources/powerLines.js';
 import { WATERPIPE_COST, WATERPIPE_RANGE } from '../../game/resources/waterPipes.js';
 
+function UtilityTags({ type, data }) {
+  if (type === 'waterplant') {
+    return (
+      <span className="tag" style={{background:"rgba(0,150,255,0.1)",color:"#60b4ff"}}>
+        💧 {Math.abs(data.wt)}/lv
+      </span>
+    );
+  }
+
+  if (type === 'sewage') {
+    return (
+      <span className="tag" style={{background:"rgba(199,125,255,0.12)",color:"#c77dff"}}>
+        🏗️ {Math.abs(data.wt)}/lv
+      </span>
+    );
+  }
+
+  if (data.wt < 0) {
+    return (
+      <span className="tag" style={{background:"rgba(0,150,255,0.1)",color:"#60b4ff"}}>
+        💧 {data.wt}/lv
+      </span>
+    );
+  }
+
+  return null;
+}
+
 export default function BuildTab({ G, onPick }) {
   const cats = [...new Set(Object.values(BD).map(d => d.c))];
 
@@ -79,8 +107,8 @@ export default function BuildTab({ G, onPick }) {
                       {d.cost>0 && <span className="tag" style={{background:"rgba(255,215,0,0.14)",color:"#ffd700"}}>{fa(d.cost)}zł</span>}
                       {d.inc>0 && <span className="tag" style={{background:"rgba(0,232,122,0.14)",color:"#00e87a"}}>+{d.inc}/lv</span>}
                       {d.jobs>0 && <span className="tag" style={{background:"rgba(162,89,255,0.14)",color:"#a259ff"}}>{d.jobs}pr/lv</span>}
-                      {d.pw<0 && <span className="tag" style={{background:"rgba(0,232,122,0.1)",color:"#00e87a"}}>⚡{d.pw}/lv</span>}
-                      {d.wt<0 && <span className="tag" style={{background:"rgba(0,150,255,0.1)",color:"#60b4ff"}}>💧{d.wt}/lv</span>}
+                      {d.pw<0 && <span className="tag" style={{background:"rgba(0,232,122,0.1)",color:"#00e87a"}}>⚡{Math.abs(d.pw)}/lv</span>}
+                      <UtilityTags type={key} data={d}/>
                       <span className="tag" style={{background:"rgba(255,180,0,0.14)",color:"#ffb400"}}>⏱{BL[0]}</span>
                       <span className="tag" style={{background:full?"rgba(255,61,90,0.15)":"rgba(255,255,255,0.05)",color:full?"#ff3d5a":"#6a90b8"}}>{cnt}/{lim}</span>
                     </div>
