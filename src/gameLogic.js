@@ -1,13 +1,14 @@
 import { BD } from './data.js';
 import { calcPower } from './game/resources/power.js';
 import { calcWater } from './game/resources/water.js';
+import { calcSewage } from './game/resources/sewage.js';
 
 export const nR = (x,y,r) => r.has(`${x},${y}`)||r.has(`${x-1},${y}`)||r.has(`${x+1},${y}`)||r.has(`${x},${y-1}`)||r.has(`${x},${y+1}`);
 export const nT = (x,y,bs) => bs.some(b=>(b.type==="bus"||b.type==="tram"||b.type==="metro")&&!b.building&&Math.abs(b.x-x)<=3&&Math.abs(b.y-y)<=3);
 
 export const fa = n => Math.abs(Math.round(n)).toLocaleString('pl');
 export const fm = n => (n>=0?'+':'-')+fa(n);
-export function ft(s){if(s<=0)return'✓';if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/86400)}d`;return`${Math.floor(s/86400)}d`;}
+export function ft(s){if(s<=0)return'✓';if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/3600)}h`;return`${Math.floor(s/86400)}d`;}
 
 const POWER_DEPENDENT_TYPES = [
   'factory',
@@ -26,6 +27,22 @@ const POWER_DEPENDENT_TYPES = [
 ];
 
 const WATER_DEPENDENT_TYPES = [
+  'apartment',
+  'house',
+  'factory',
+  'shop',
+  'office',
+  'bank',
+  'hospital',
+  'school',
+  'police',
+  'fire',
+  'bus',
+  'tram',
+  'metro',
+];
+
+const SEWAGE_DEPENDENT_TYPES = [
   'apartment',
   'house',
   'factory',
@@ -69,12 +86,30 @@ function getWaterFeeMultiplier(water) {
   return Math.max(0, Math.min(1, (water.serviceEfficiency || 0) / 100));
 }
 
+function getSewageMultiplier(sewage) {
+  if (!sewage || sewage.totalLoad <= 0) return 1;
+  if (sewage.ok) return 1;
+
+  return Math.max(0.55, (sewage.serviceEfficiency || 0) / 100);
+}
+
+function getSewageFeeMultiplier(sewage) {
+  if (!sewage || sewage.totalLoad <= 0) return 1;
+  if (sewage.ok) return 1;
+
+  return Math.max(0, Math.min(1, (sewage.serviceEfficiency || 0) / 100));
+}
+
 function isPowerDependent(type) {
   return POWER_DEPENDENT_TYPES.includes(type);
 }
 
 function isWaterDependent(type) {
   return WATER_DEPENDENT_TYPES.includes(type);
+}
+
+function isSewageDependent(type) {
+  return SEWAGE_DEPENDENT_TYPES.includes(type);
 }
 
 function getBuildingEnergyMultiplier(building, power, globalPowerMultiplier) {
@@ -95,6 +130,16 @@ function getBuildingWaterMultiplier(building, water, globalWaterMultiplier) {
   }
 
   return globalWaterMultiplier;
+}
+
+function getBuildingSewageMultiplier(building, sewage, globalSewageMultiplier) {
+  if (!isSewageDependent(building.type)) return 1;
+
+  if (sewage?.disconnectedUIDs?.includes(building.uid)) {
+    return 0.75;
+  }
+
+  return globalSewageMultiplier;
 }
 
 export function buildStarterRoads(cx, cy) {
@@ -140,15 +185,28 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     feeEfficiency: Math.round(waterFeeMultiplier * 100),
   };
 
+  const rawSewage = calcSewage(act, waterPipes);
+  const sewageMultiplier = getSewageMultiplier(rawSewage);
+  const sewageFeeMultiplier = getSewageFeeMultiplier(rawSewage);
+
+  const sewage = {
+    ...rawSewage,
+    multiplier: sewageMultiplier,
+    efficiency: Math.round(sewageMultiplier * 100),
+    feeMultiplier: sewageFeeMultiplier,
+    feeEfficiency: Math.round(sewageFeeMultiplier * 100),
+  };
+
   act.forEach(b => {
     const d = BD[b.type]; if(!d) return;
     const ok = d.nr || nR(b.x,b.y,roads) || nT(b.x,b.y,act);
     const roadMultiplier = ok ? 1 : 0.05;
     const waterPopMultiplier = water?.disconnectedUIDs?.includes(b.uid) ? 0.35 : 1;
+    const sewagePopMultiplier = sewage?.disconnectedUIDs?.includes(b.uid) ? 0.75 : 1;
 
     exp += d.exp * b.lv;
 
-    pop += d.pop * b.lv * roadMultiplier * waterPopMultiplier;
+    pop += d.pop * b.lv * roadMultiplier * waterPopMultiplier * sewagePopMultiplier;
     co2 += d.co2 * b.lv * (b.co2f ? 0.6 : 1);
 
     if(d.jobs > 0) jobs += d.jobs * b.lv;
@@ -169,8 +227,9 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     const jobMultiplier = ['factory','office','shop','bank'].includes(b.type) ? er : 1;
     const energyMultiplier = getBuildingEnergyMultiplier(b, power, powerMultiplier);
     const buildingWaterMultiplier = getBuildingWaterMultiplier(b, water, waterMultiplier);
+    const buildingSewageMultiplier = getBuildingSewageMultiplier(b, sewage, sewageMultiplier);
 
-    inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier * buildingWaterMultiplier;
+    inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier * buildingWaterMultiplier * buildingSewageMultiplier;
   });
 
   const ri = Math.floor(pop * (fees?.rent  || 0) / 10);
@@ -184,7 +243,8 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
   const transitCount = act.filter(b => ['bus','tram','metro'].includes(b.type)).length;
   const ti = Math.floor(pop * (fees?.transit || 0) / 10) * Math.min(transitCount, 5);
 
-  const si = Math.floor(pop * (fees?.sewage || 0) / 10);
+  const siBase = Math.floor(pop * (fees?.sewage || 0) / 10);
+  const si = Math.floor(siBase * sewageFeeMultiplier);
 
   inc += ri + wi + pi + ti + si;
 
@@ -208,6 +268,14 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
 
     h.services = (h.services||0) - unfairWaterFeePenalty;
     h.housing = (h.housing||0) - Math.ceil(unfairWaterFeePenalty / 2);
+  }
+
+  if(sewage.deficit > 0 && (fees?.sewage || 0) > 0) {
+    const missingSewageFeePercent = 100 - sewage.feeEfficiency;
+    const unfairSewageFeePenalty = Math.ceil(((fees.sewage || 0) * missingSewageFeePercent) / 20);
+
+    h.services = (h.services||0) - unfairSewageFeePenalty;
+    h.env = (h.env||0) - Math.ceil(unfairSewageFeePenalty / 2);
   }
 
   if(power.gridDeficit > 0) {
@@ -242,9 +310,24 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     h.services = (h.services||0) - Math.ceil(water.inactiveWaterPipeCount / 4);
   }
 
+  if(sewage.treatmentDeficit > 0) {
+    h.env = (h.env||0) - Math.floor(sewage.treatmentDeficit / 4);
+    h.services = (h.services||0) - Math.floor(sewage.treatmentDeficit / 8);
+    co2 += Math.floor(sewage.treatmentDeficit / 3);
+  }
+
+  if(sewage.disconnectedCount > 0) {
+    h.services = (h.services||0) - sewage.disconnectedCount * 3;
+    h.housing = (h.housing||0) - sewage.disconnectedCount;
+    h.env = (h.env||0) - sewage.disconnectedCount * 2;
+    co2 += sewage.disconnectedCount * 2;
+  }
+
   const wt = water.legacyWt;
+  const sw = sewage.legacySewage;
 
   if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 5);
+  if(sw > 0) h.env = (h.env||0) - Math.floor(sw / 5);
 
   exp += loan ? Math.floor(loan.amt * loan.rate / 12) : 0;
 
@@ -255,6 +338,7 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
 
     power,
     water,
+    sewage,
 
     pw: power.legacyPw,
     pwOk: power.ok,
@@ -262,9 +346,13 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     wt: Math.floor(wt),
     wtOk: water.ok,
 
+    sw: Math.floor(sw),
+    swOk: sewage.ok,
+
     ri, wi, pi, ti, si,
     wiBase,
     piBase,
+    siBase,
 
     feeInc: ri + wi + pi + ti + si,
 
@@ -346,8 +434,8 @@ export function genInbox(G) {
       id:"wtinactive",
       icon:"💧",
       from:"Wodociągi miejskie",
-      sub:"Nieaktywne rury wod-kan",
-      body:`Masz ${s.water.inactiveWaterPipeCount} kaf. rur, które nie są połączone z wodociągami albo oczyszczalnią. Martwe rury nie obsługują budynków.`,
+      sub:"Nieaktywne rury wodne",
+      body:`Masz ${s.water.inactiveWaterPipeCount} kaf. rur, które nie są połączone z wodociągami. Takie rury nie dostarczają czystej wody.`,
       pri:"med",
       read:false
     });
@@ -358,7 +446,7 @@ export function genInbox(G) {
       icon:"🚱",
       from:"Wodociągi miejskie",
       sub:"Budynki bez dostępu do wody",
-      body:`Bez wody: ${s.water.disconnectedCount} bud. Przeciągnij rury wod-kan bliżej tych budynków. Zasięg rur: ${s.water.waterPipeRange || 3} kratki.`,
+      body:`Bez wody: ${s.water.disconnectedCount} bud. Przeciągnij rury wod-kan bliżej tych budynków i połącz je z wodociągami. Zasięg rur: ${s.water.waterPipeRange || 3} kratki.`,
       pri:"high",
       read:false
     });
@@ -369,7 +457,7 @@ export function genInbox(G) {
       icon:"💧",
       from:"Mieszkańcy",
       sub:"Problem z wodą!",
-      body:`Problem wody: ${s.wt} j. Wydajność systemu: ${s.water?.efficiency || 35}%. Zbuduj wodociągi, oczyszczalnię albo przeciągnij rury wod-kan.`,
+      body:`Problem wody: ${s.wt} j. Wydajność systemu: ${s.water?.efficiency || 35}%. Zbuduj wodociągi albo przeciągnij rury wod-kan.`,
       pri:"high",
       read:false
     });
@@ -381,6 +469,39 @@ export function genInbox(G) {
       from:"Mieszkańcy",
       sub:"Płacimy za słabą wodę",
       body:`Opłata za wodę działa tylko na ${s.water?.feeEfficiency || 0}%. Realny dochód: ${fa(s.wi)} zł zamiast ${fa(s.wiBase || 0)} zł/mie.`,
+      pri:"med",
+      read:false
+    });
+
+  if(s.sewage?.disconnectedCount > 0)
+    msgs.push({
+      id:"swnet",
+      icon:"🧪",
+      from:"Sanepid",
+      sub:"Budynki bez kanalizacji",
+      body:`Bez kanalizacji: ${s.sewage.disconnectedCount} bud. Połącz rury wod-kan z oczyszczalnią, żeby odbierać ścieki.`,
+      pri:"high",
+      read:false
+    });
+
+  if(!s.swOk && s.sw > 10)
+    msgs.push({
+      id:"sw",
+      icon:"🏗️",
+      from:"Oczyszczalnia",
+      sub:"Problem ze ściekami!",
+      body:`Problem ścieków: ${s.sw} j. Wydajność kanalizacji: ${s.sewage?.efficiency || 35}%. Zbuduj oczyszczalnię albo połącz dzielnice rurami.`,
+      pri:"high",
+      read:false
+    });
+
+  if(!s.swOk && (G.fees?.sewage || 0) > 0)
+    msgs.push({
+      id:"swfee",
+      icon:"💸",
+      from:"Mieszkańcy",
+      sub:"Opłata za kanalizację nie ma sensu",
+      body:`Opłata za ścieki działa tylko na ${s.sewage?.feeEfficiency || 0}%. Realny dochód: ${fa(s.si)} zł zamiast ${fa(s.siBase || 0)} zł/mie.`,
       pri:"med",
       read:false
     });
