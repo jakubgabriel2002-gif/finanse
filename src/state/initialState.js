@@ -34,6 +34,7 @@ export const INIT_STATE = {
   elTmr: 48,
   riotOn: false,
   riotTmr: 0,
+  serviceEventCD: 0,
   inbox: [],
   events: [],
   news: [],
@@ -126,6 +127,7 @@ export function normalizeLoadedGameState(save) {
     roads,
     powerLines,
     waterPipes,
+    serviceEventCD: Number.isFinite(save?.serviceEventCD) ? save.serviceEventCD : base.serviceEventCD,
     weather: save?.weather || WEATHERS[0],
     buildMode,
     buildings,
@@ -168,6 +170,7 @@ export function prepareGameForSave(gameState) {
     roads: [...gameState.roads],
     powerLines: [...(gameState.powerLines || new Set())],
     waterPipes: [...(gameState.waterPipes || new Set())],
+    serviceEventCD: Number.isFinite(gameState.serviceEventCD) ? gameState.serviceEventCD : 0,
     buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
