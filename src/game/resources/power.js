@@ -1,22 +1,19 @@
 import { BD } from '../../data.js';
+import {
+  getSourceConnectedPowerLines,
+  isInPowerLineRange,
+  POWERLINE_RANGE,
+} from './powerLines.js';
 
 /**
- * System energii / prądu.
+ * System energii.
  *
- * Etap 7:
- * - dodaliśmy sieć energetyczną,
- * - Ratusz, elektrownie, farmy solarne, wiatraki i podstacje są punktami sieci,
- * - budynki poza zasięgiem sieci są odcięte,
- * - odcięte budynki nie są liczone jako normalnie zasilane.
+ * Etap 7B:
+ * - źródła energii produkują prąd,
+ * - linie energetyczne muszą być połączone ze źródłem,
+ * - budynki mają prąd tylko w zasięgu aktywnej linii,
+ * - linie niepołączone ze źródłem nie zasilają miasta.
  */
-
-const NETWORK_RANGE = {
-  townhall: 6,
-  substation: 7,
-  powerplant: 8,
-  solar: 5,
-  windmill: 5,
-};
 
 function getWeatherSolarMultiplier(weather) {
   return weather?.sm || 1;
@@ -39,40 +36,27 @@ function getBuildingPowerValue(building, weather) {
   return basePower * building.lv;
 }
 
-function getNetworkRange(building) {
-  const baseRange = NETWORK_RANGE[building.type] || 0;
-
-  if (!baseRange) return 0;
-
-  // Upgrade budynku lekko zwiększa zasięg sieci.
-  return baseRange + Math.max(0, building.lv - 1);
+function isProducerPowerValue(value) {
+  return value < 0;
 }
 
-function distance(a, b) {
-  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+function isConsumerPowerValue(value) {
+  return value > 0;
 }
 
-function isNetworkNode(entry) {
-  if (!entry?.building) return false;
+function isBuildingConnectedToPower(building, powerValue, activePowerLines) {
+  // Źródła energii same są częścią systemu.
+  if (isProducerPowerValue(powerValue)) return true;
 
-  if (entry.type === 'townhall') return true;
-  if (entry.type === 'substation') return true;
+  // Budynek bez zapotrzebowania na prąd nie psuje sieci.
+  if (!isConsumerPowerValue(powerValue)) return true;
 
-  return entry.powerValue < 0;
+  return isInPowerLineRange(building.x, building.y, activePowerLines);
 }
 
-function isConnectedToNetwork(entry, nodes) {
-  if (!entry?.building) return false;
+export function calcPower(activeBuildings, weather, powerLines = new Set()) {
+  const activePowerLines = getSourceConnectedPowerLines(powerLines, activeBuildings);
 
-  // Same punkty sieci są zawsze częścią sieci.
-  if (isNetworkNode(entry)) return true;
-
-  if (!nodes.length) return false;
-
-  return nodes.some(node => distance(entry.building, node.building) <= node.range);
-}
-
-export function calcPower(activeBuildings, weather) {
   const entries = activeBuildings
     .map(building => {
       const data = BD[building.type];
@@ -88,23 +72,9 @@ export function calcPower(activeBuildings, weather) {
     })
     .filter(Boolean);
 
-  const nodes = entries
-    .filter(isNetworkNode)
-    .map(entry => ({
-      uid: entry.uid,
-      type: entry.type,
-      name: entry.data.n,
-      icon: entry.data.e,
-      x: entry.building.x,
-      y: entry.building.y,
-      level: entry.building.lv,
-      range: getNetworkRange(entry.building),
-      building: entry.building,
-    }));
-
-  let demand = 0;
-  let supply = 0;
+  let connectedDemand = 0;
   let disconnectedDemand = 0;
+  let supply = 0;
 
   const consumers = [];
   const producers = [];
@@ -113,9 +83,9 @@ export function calcPower(activeBuildings, weather) {
   entries.forEach(entry => {
     const building = entry.building;
     const value = entry.powerValue;
-    const connected = isConnectedToNetwork(entry, nodes);
+    const connected = isBuildingConnectedToPower(building, value, activePowerLines);
 
-    if (value > 0) {
+    if (isConsumerPowerValue(value)) {
       const consumer = {
         uid: building.uid,
         type: building.type,
@@ -129,14 +99,14 @@ export function calcPower(activeBuildings, weather) {
       consumers.push(consumer);
 
       if (connected) {
-        demand += value;
+        connectedDemand += value;
       } else {
         disconnectedDemand += value;
         disconnectedConsumers.push(consumer);
       }
     }
 
-    if (value < 0) {
+    if (isProducerPowerValue(value)) {
       const produced = Math.abs(value);
 
       supply += produced;
@@ -148,33 +118,33 @@ export function calcPower(activeBuildings, weather) {
         icon: entry.data.e,
         level: building.lv,
         value: produced,
-        connected,
+        connected: true,
       });
     }
   });
 
-  const totalDemand = demand + disconnectedDemand;
-  const gridDeficit = Math.max(0, demand - supply);
+  const totalDemand = connectedDemand + disconnectedDemand;
+  const gridDeficit = Math.max(0, connectedDemand - supply);
   const deficit = gridDeficit + disconnectedDemand;
-  const surplus = gridDeficit > 0 ? 0 : Math.max(0, supply - demand);
-  const balance = supply - demand;
+  const surplus = gridDeficit > 0 ? 0 : Math.max(0, supply - connectedDemand);
+  const balance = supply - connectedDemand;
   const ok = deficit <= 0;
 
   const networkCoverage = totalDemand > 0
-    ? Math.round((demand / totalDemand) * 100)
+    ? Math.round((connectedDemand / totalDemand) * 100)
     : 100;
 
-  const supplyCoverage = demand > 0
-    ? Math.min(100, Math.round((supply / demand) * 100))
-    : 100;
+  const supplyCoverage = connectedDemand > 0
+    ? Math.min(100, Math.round((supply / connectedDemand) * 100))
+    : supply > 0 ? 100 : 100;
 
   const serviceEfficiency = totalDemand > 0
-    ? Math.min(100, Math.round((Math.min(supply, demand) / totalDemand) * 100))
+    ? Math.min(100, Math.round((Math.min(supply, connectedDemand) / totalDemand) * 100))
     : 100;
 
   return {
-    demand: Math.floor(demand),
-    connectedDemand: Math.floor(demand),
+    demand: Math.floor(connectedDemand),
+    connectedDemand: Math.floor(connectedDemand),
     disconnectedDemand: Math.floor(disconnectedDemand),
     totalDemand: Math.floor(totalDemand),
 
@@ -189,13 +159,25 @@ export function calcPower(activeBuildings, weather) {
     supplyCoverage,
     serviceEfficiency,
 
+    powerLineRange: POWERLINE_RANGE,
+    powerLineCount: powerLines?.size || 0,
+    activePowerLineCount: activePowerLines.size,
+    inactivePowerLineCount: Math.max(0, (powerLines?.size || 0) - activePowerLines.size),
+
     legacyPw: deficit > 0
       ? Math.floor(deficit)
-      : Math.floor(demand - supply),
+      : Math.floor(connectedDemand - supply),
 
     consumers,
     producers,
-    nodes: nodes.map(({ building, ...node }) => node),
+    nodes: producers.map(producer => ({
+      uid: producer.uid,
+      type: producer.type,
+      name: producer.name,
+      icon: producer.icon,
+      level: producer.level,
+      range: POWERLINE_RANGE,
+    })),
     disconnectedConsumers,
     disconnectedUIDs: disconnectedConsumers.map(item => item.uid),
     disconnectedCount: disconnectedConsumers.length,
