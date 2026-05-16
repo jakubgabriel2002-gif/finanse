@@ -1,4 +1,4 @@
-import { WEATHERS, TSTEPS } from '../data.js';
+import { WEATHERS, TSTEPS, BD } from '../data.js';
 
 export const SAVE_KEY = 'neocity_v7';
 
@@ -70,7 +70,9 @@ function restoreTutorialBuildMode(save, roads) {
   const tutStep = Number.isFinite(save.tutStep) ? save.tutStep : 0;
   const step = TSTEPS[tutStep];
 
-  if (save.buildMode) return save.buildMode;
+  if (save.buildMode && (save.buildMode === 'road' || save.buildMode === 'powerline' || BD[save.buildMode])) {
+    return save.buildMode;
+  }
 
   if (step?.waitForRoads && roads.size < step.waitForRoads) {
     return 'road';
@@ -79,11 +81,33 @@ function restoreTutorialBuildMode(save, roads) {
   return null;
 }
 
+function normalizeBuildings(buildings) {
+  if (!Array.isArray(buildings)) return [];
+  return buildings.filter(building => building && BD[building.type]);
+}
+
+function rebuildGridFromBuildings(buildings) {
+  const grid = {};
+
+  buildings.forEach(building => {
+    if (
+      Number.isFinite(building.x) &&
+      Number.isFinite(building.y)
+    ) {
+      grid[`${building.x},${building.y}`] = building;
+    }
+  });
+
+  return grid;
+}
+
 export function normalizeLoadedGameState(save) {
   const base = createInitialGameState();
   const roads = new Set(Array.isArray(save?.roads) ? save.roads : []);
   const powerLines = new Set(Array.isArray(save?.powerLines) ? save.powerLines : []);
   const buildMode = restoreTutorialBuildMode(save, roads);
+  const buildings = normalizeBuildings(save?.buildings);
+  const grid = rebuildGridFromBuildings(buildings);
 
   return {
     ...base,
@@ -92,8 +116,8 @@ export function normalizeLoadedGameState(save) {
     powerLines,
     weather: save?.weather || WEATHERS[0],
     buildMode,
-    buildings: Array.isArray(save?.buildings) ? save.buildings : [],
-    grid: save?.grid || {},
+    buildings,
+    grid,
     log: Array.isArray(save?.log) ? save.log : base.log,
     inbox: Array.isArray(save?.inbox) ? save.inbox : [],
     events: Array.isArray(save?.events) ? save.events : [],
@@ -122,8 +146,13 @@ export function loadGame() {
 }
 
 export function prepareGameForSave(gameState) {
+  const buildings = normalizeBuildings(gameState.buildings);
+  const grid = rebuildGridFromBuildings(buildings);
+
   return {
     ...gameState,
+    buildings,
+    grid,
     roads: [...gameState.roads],
     powerLines: [...(gameState.powerLines || new Set())],
     buildMode: gameState.tutDone ? null : gameState.buildMode,
