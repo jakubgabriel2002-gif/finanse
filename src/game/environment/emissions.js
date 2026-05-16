@@ -1,6 +1,9 @@
 import { BD } from '../../data.js';
-
-export const FILTER_REDUCTION = 0.5;
+import {
+  getFilterLevel,
+  getFilterEmissionMultiplier,
+  getFilterReductionPercent,
+} from '../buildingUpgrades.js';
 
 const CO2_TYPE_MULTIPLIER = {
   factory: 1.15,
@@ -35,9 +38,8 @@ function getBaseEmission(building) {
 
 function getFilteredEmission(building, baseEmission) {
   if (baseEmission <= 0) return baseEmission;
-  if (!building.co2f) return baseEmission;
 
-  return baseEmission * FILTER_REDUCTION;
+  return baseEmission * getFilterEmissionMultiplier(building);
 }
 
 function getAbsorption(building, baseEmission) {
@@ -151,6 +153,32 @@ function sortByValueDesc(items) {
   return [...items].sort((a, b) => b.value - a.value);
 }
 
+export function getBuildingEmissionPreview(building) {
+  const data = BD[building?.type];
+  if (!building || !data) {
+    return {
+      baseEmission: 0,
+      finalEmission: 0,
+      reduction: 0,
+      filterLevel: 0,
+      filterReductionPercent: 0,
+    };
+  }
+
+  const baseEmission = getBaseEmission(building);
+  const finalEmission = getFilteredEmission(building, baseEmission);
+  const reduction = Math.max(0, baseEmission - finalEmission);
+  const filterLevel = getFilterLevel(building);
+
+  return {
+    baseEmission: Math.floor(baseEmission),
+    finalEmission: Math.floor(finalEmission),
+    reduction: Math.floor(reduction),
+    filterLevel,
+    filterReductionPercent: getFilterReductionPercent(filterLevel),
+  };
+}
+
 export function calcEmissions(activeBuildings, extraEmission = 0) {
   let gross = 0;
   let filteredReduction = 0;
@@ -163,12 +191,12 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
     const data = BD[building.type];
     if (!data) return;
 
-    const baseEmission = getBaseEmission(building);
+    const preview = getBuildingEmissionPreview(building);
+    const baseEmission = preview.baseEmission;
+    const finalEmission = preview.finalEmission;
+    const reduction = preview.reduction;
 
     if (baseEmission > 0) {
-      const finalEmission = getFilteredEmission(building, baseEmission);
-      const reduction = Math.max(0, baseEmission - finalEmission);
-
       gross += finalEmission;
       filteredReduction += reduction;
 
@@ -181,7 +209,9 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
         value: finalEmission,
         baseValue: baseEmission,
         reduction,
-        hasFilter: !!building.co2f,
+        hasFilter: preview.filterLevel > 0,
+        filterLevel: preview.filterLevel,
+        filterReductionPercent: preview.filterReductionPercent,
       });
 
       if (reduction > 0) {
@@ -193,6 +223,8 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
           level: building.lv,
           value: reduction,
           source: 'filter',
+          filterLevel: preview.filterLevel,
+          filterReductionPercent: preview.filterReductionPercent,
         });
       }
     }
@@ -210,6 +242,8 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
         level: building.lv,
         value: absorbed,
         source: 'building',
+        filterLevel: 0,
+        filterReductionPercent: 0,
       });
     }
   });
@@ -221,6 +255,18 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
   const airQuality = Math.round(getAirQuality(net));
   const level = getAirLevel(airQuality);
   const penalty = getPollutionPenalty(net, airQuality);
+
+  const sortedEmitters = sortByValueDesc(emitters).map(item => ({
+    ...item,
+    value: Math.floor(item.value),
+    baseValue: Math.floor(item.baseValue),
+    reduction: Math.floor(item.reduction),
+  }));
+
+  const sortedReducers = sortByValueDesc(reducers).map(item => ({
+    ...item,
+    value: Math.floor(item.value),
+  }));
 
   return {
     gross: Math.floor(totalGross),
@@ -240,19 +286,10 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
     warning: airQuality < 70 && airQuality >= 45,
     critical: airQuality < 45,
 
-    emitters: sortByValueDesc(emitters).map(item => ({
-      ...item,
-      value: Math.floor(item.value),
-      baseValue: Math.floor(item.baseValue),
-      reduction: Math.floor(item.reduction),
-    })),
+    emitters: sortedEmitters,
+    reducers: sortedReducers,
 
-    reducers: sortByValueDesc(reducers).map(item => ({
-      ...item,
-      value: Math.floor(item.value),
-    })),
-
-    topEmitter: sortByValueDesc(emitters)[0] || null,
-    topReducer: sortByValueDesc(reducers)[0] || null,
+    topEmitter: sortedEmitters[0] || null,
+    topReducer: sortedReducers[0] || null,
   };
 }
