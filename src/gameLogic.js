@@ -2,6 +2,7 @@ import { BD } from './data.js';
 import { calcPower } from './game/resources/power.js';
 import { calcWater } from './game/resources/water.js';
 import { calcSewage } from './game/resources/sewage.js';
+import { calcEmissions } from './game/environment/emissions.js';
 
 export const nR = (x,y,r) => r.has(`${x},${y}`)||r.has(`${x-1},${y}`)||r.has(`${x+1},${y}`)||r.has(`${x},${y-1}`)||r.has(`${x},${y+1}`);
 export const nT = (x,y,bs) => bs.some(b=>(b.type==="bus"||b.type==="tram"||b.type==="metro")&&!b.building&&Math.abs(b.x-x)<=3&&Math.abs(b.y-y)<=3);
@@ -157,7 +158,7 @@ export function buildStarterRoads(cx, cy) {
 }
 
 export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set(), waterPipes = new Set()) {
-  let inc=0, exp=0, pop=0, co2=0, jobs=0;
+  let inc=0, exp=0, pop=0, jobs=0;
   const h = {housing:0, jobs:0, edu:0, env:0, services:0};
   const act = blds.filter(b => !b.building);
 
@@ -197,6 +198,19 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     feeEfficiency: Math.round(sewageFeeMultiplier * 100),
   };
 
+  let infrastructureCo2Penalty = 0;
+
+  if(sewage.treatmentDeficit > 0) {
+    infrastructureCo2Penalty += Math.floor(sewage.treatmentDeficit / 4);
+  }
+
+  if(sewage.disconnectedCount > 0) {
+    infrastructureCo2Penalty += sewage.disconnectedCount * 2;
+  }
+
+  const emissions = calcEmissions(act, infrastructureCo2Penalty);
+  const co2 = emissions.net;
+
   act.forEach(b => {
     const d = BD[b.type]; if(!d) return;
     const ok = d.nr || nR(b.x,b.y,roads) || nT(b.x,b.y,act);
@@ -207,12 +221,15 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     exp += d.exp * b.lv;
 
     pop += d.pop * b.lv * roadMultiplier * waterPopMultiplier * sewagePopMultiplier;
-    co2 += d.co2 * b.lv * (b.co2f ? 0.6 : 1);
 
     if(d.jobs > 0) jobs += d.jobs * b.lv;
 
     Object.entries(d.hap).forEach(([k,v]) => { h[k] = (h[k]||0) + v; });
   });
+
+  h.env = (h.env || 0) + emissions.penalty.env;
+  h.housing = (h.housing || 0) + emissions.penalty.housing;
+  h.services = (h.services || 0) + emissions.penalty.services;
 
   if(weather?.id === 'rainy') h.env = (h.env||0) - 5;
   if(weather?.id === 'storm') { h.env = (h.env||0) - 10; h.housing = (h.housing||0) - 5; }
@@ -309,14 +326,12 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
   if(sewage.treatmentDeficit > 0) {
     h.env = (h.env||0) - Math.floor(sewage.treatmentDeficit / 6);
     h.services = (h.services||0) - Math.floor(sewage.treatmentDeficit / 10);
-    co2 += Math.floor(sewage.treatmentDeficit / 4);
   }
 
   if(sewage.disconnectedCount > 0) {
     h.services = (h.services||0) - sewage.disconnectedCount * 3;
     h.housing = (h.housing||0) - sewage.disconnectedCount;
     h.env = (h.env||0) - sewage.disconnectedCount * 2;
-    co2 += sewage.disconnectedCount * 2;
   }
 
   const wt = water.legacyWt;
@@ -335,6 +350,7 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     power,
     water,
     sewage,
+    emissions,
 
     pw: power.legacyPw,
     pwOk: power.ok,
@@ -491,6 +507,28 @@ export function genInbox(G) {
       read:false
     });
 
+  if(s.emissions?.critical)
+    msgs.push({
+      id:"aircritical",
+      icon:"☠️",
+      from:"Lekarze",
+      sub:"Krytyczna jakość powietrza!",
+      body:`Jakość powietrza spadła do ${s.emissions.airQuality}%. Największy emitent: ${s.emissions.topEmitter ? `${s.emissions.topEmitter.icon} ${s.emissions.topEmitter.name}` : 'brak danych'}. Buduj parki, transport elektryczny i montuj filtry CO₂.`,
+      pri:"high",
+      read:false
+    });
+
+  if(s.emissions?.warning)
+    msgs.push({
+      id:"airwarn",
+      icon:"🏭",
+      from:"Ekolodzy",
+      sub:"Powietrze się pogarsza",
+      body:`Jakość powietrza: ${s.emissions.airQuality}%. Emisja netto: ${s.emissions.net} j. Zainstaluj filtry CO₂ albo zbuduj więcej zieleni.`,
+      pri:"med",
+      read:false
+    });
+
   if(s.er < 50 && s.jobs > 20)
     msgs.push({
       id:"emp",
@@ -502,7 +540,7 @@ export function genInbox(G) {
       read:false
     });
 
-  if(s.co2 > 60)
+  if(s.co2 > 60 && !s.emissions)
     msgs.push({
       id:"co2",
       icon:"🏭",
