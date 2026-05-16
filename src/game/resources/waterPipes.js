@@ -43,7 +43,7 @@ export function isInWaterPipeRange(x, y, waterPipes) {
   });
 }
 
-export function canBuildWaterPipe({ x, y, terrain, waterPipes, buildings }) {
+export function canBuildWaterPipe({ x, y, terrain, waterPipes, buildings, roads }) {
   const key = keyOf(x, y);
 
   if (terrain === 2) {
@@ -57,6 +57,15 @@ export function canBuildWaterPipe({ x, y, terrain, waterPipes, buildings }) {
     return {
       ok: false,
       reason: '⚠️ Tu już jest rura wod-kan.',
+    };
+  }
+
+  // Droga działa jako legalny korytarz infrastruktury.
+  // Rura na drodze może być martwa, dopóki nie połączysz jej ze źródłem.
+  if (roads?.has(key)) {
+    return {
+      ok: true,
+      reason: '',
     };
   }
 
@@ -76,7 +85,7 @@ export function canBuildWaterPipe({ x, y, terrain, waterPipes, buildings }) {
 
   return {
     ok: false,
-    reason: '⚠️ Rury trzeba ciągnąć od wodociągów, oczyszczalni albo od istniejącej rury.',
+    reason: '⚠️ Rury trzeba ciągnąć od wodociągów, oczyszczalni, drogi albo od istniejącej rury.',
   };
 }
 
