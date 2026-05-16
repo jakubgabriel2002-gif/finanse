@@ -19,6 +19,10 @@ function getPowerData(s) {
     networkCoverage: 100,
     supplyCoverage: s.pwOk ? 100 : 0,
     serviceEfficiency: s.pwOk ? 100 : 35,
+    powerLineRange: 3,
+    powerLineCount: 0,
+    activePowerLineCount: 0,
+    inactivePowerLineCount: 0,
     disconnectedCount: 0,
     consumers: [],
     producers: [],
@@ -58,8 +62,9 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
       {(!s.pwOk||!s.wtOk||s.er<50) && (
         <div style={{background:"rgba(255,61,90,0.08)",border:"1px solid rgba(255,61,90,0.3)",borderRadius:10,padding:10,marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:"#ff3d5a",marginBottom:6}}>🚨 PILNE PROBLEMY</div>
-          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Problem energii {fa(power.deficit)} j. — zbuduj źródło prądu albo podstację!</div>}
-          {power.disconnectedCount > 0 && <div style={{fontSize:11,color:"#ffd700",marginBottom:3}}>🔌 {power.disconnectedCount} bud. poza zasięgiem sieci — postaw podstację bliżej dzielnicy.</div>}
+          {!s.pwOk && <div style={{fontSize:11,color:"#ff9944",marginBottom:3}}>⚡ Problem energii {fa(power.deficit)} j. — zbuduj źródło prądu albo przeciągnij linie.</div>}
+          {power.disconnectedCount > 0 && <div style={{fontSize:11,color:"#ffd700",marginBottom:3}}>🔌 {power.disconnectedCount} bud. poza siecią — dociągnij linię energetyczną w promieniu {power.powerLineRange || 3} kratek.</div>}
+          {power.inactivePowerLineCount > 0 && <div style={{fontSize:11,color:"#ff7d7d",marginBottom:3}}>✖ {power.inactivePowerLineCount} kaf. linii nie jest połączonych ze źródłem energii.</div>}
           {!s.wtOk && <div style={{fontSize:11,color:"#60b4ff",marginBottom:3}}>💧 Deficyt wody {s.wt} — zbuduj wodociągi lub oczyszczalnię!</div>}
           {s.er<50 && <div style={{fontSize:11,color:"#ffd700"}}>💼 Zatrudnienie {s.er}% — za mało mieszkańców!</div>}
         </div>
@@ -130,8 +135,14 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         <div className="row"><span className="rl">Zasięg sieci</span><span className="rv" style={{color:power.networkCoverage>=90?'#00e87a':power.networkCoverage>=60?'#ffd700':'#ff3d5a'}}>{power.networkCoverage ?? 100}%</span></div>
         <div className="row"><span className="rl">Pokrycie produkcji</span><span className="rv" style={{color:power.supplyCoverage>=90?'#00e87a':power.supplyCoverage>=60?'#ffd700':'#ff3d5a'}}>{power.supplyCoverage ?? 100}%</span></div>
         <div className="row"><span className="rl">Wydajność systemu</span><span className="rv" style={{color:power.serviceEfficiency>=90?'#00e87a':power.serviceEfficiency>=60?'#ffd700':'#ff3d5a'}}>{power.serviceEfficiency ?? 100}%</span></div>
+
+        <div className="row"><span className="rl">Linie łącznie</span><span className="rv" style={{color:"#00b4ff"}}>{power.powerLineCount || 0}</span></div>
+        <div className="row"><span className="rl">Linie aktywne</span><span className="rv" style={{color:(power.activePowerLineCount || 0)>0?'#00e87a':'#3a5f82'}}>{power.activePowerLineCount || 0}</span></div>
+        <div className="row"><span className="rl">Linie nieaktywne</span><span className="rv" style={{color:(power.inactivePowerLineCount || 0)>0?'#ff3d5a':'#3a5f82'}}>{power.inactivePowerLineCount || 0}</span></div>
+        <div className="row"><span className="rl">Zasięg jednej linii</span><span className="rv" style={{color:"#ffd700"}}>{power.powerLineRange || 3} kratki</span></div>
+
         <div className="row"><span className="rl">Budynki poza siecią</span><span className="rv" style={{color:power.disconnectedCount>0?'#ff3d5a':'#00e87a'}}>{power.disconnectedCount || 0}</span></div>
-        <div className="row"><span className="rl">Punkty sieci</span><span className="rv" style={{color:"#00b4ff"}}>{power.nodes?.length || 0}</span></div>
+        <div className="row"><span className="rl">Źródła energii</span><span className="rv" style={{color:"#00b4ff"}}>{power.nodes?.length || 0}</span></div>
         <div className="row"><span className="rl">Skuteczność opłaty za prąd</span><span className="rv" style={{color:(power.feeEfficiency ?? 100)>=90?'#00e87a':(power.feeEfficiency ?? 100)>=60?'#ffd700':'#ff3d5a'}}>{power.feeEfficiency ?? 100}%</span></div>
 
         <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
@@ -173,7 +184,22 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
           }}>
             🔌 Poza siecią: {power.disconnectedConsumers.slice(0,4).map(b => `${b.icon} ${b.name}`).join(', ')}
             {power.disconnectedConsumers.length > 4 ? ` +${power.disconnectedConsumers.length - 4} więcej` : ''}.
-            Postaw podstację bliżej tych budynków.
+            Przeciągnij aktywną linię energetyczną bliżej tych budynków.
+          </div>
+        )}
+
+        {power.inactivePowerLineCount > 0 && (
+          <div style={{
+            marginTop:10,
+            fontSize:10,
+            color:"#ff7d7d",
+            lineHeight:1.45,
+            background:"rgba(255,61,90,0.06)",
+            border:"1px solid rgba(255,61,90,0.18)",
+            borderRadius:8,
+            padding:8,
+          }}>
+            ✖ Część linii jest martwa, bo nie ma ciągłego połączenia ze źródłem energii. Wejdź w tryb budowania linii — aktywne linie świecą na żółto, martwe są czerwone.
           </div>
         )}
 
