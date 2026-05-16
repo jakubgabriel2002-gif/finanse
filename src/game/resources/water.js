@@ -1,61 +1,44 @@
 import { BD } from '../../data.js';
 import {
-  getSourceConnectedWaterPipes,
+  getWaterSupplyConnectedPipes,
   isInWaterPipeRange,
   WATERPIPE_RANGE,
 } from './waterPipes.js';
 
 /**
- * System wody — Etap 8B.
+ * System czystej wody — Etap 8C.
  *
- * Na tym etapie:
- * - rury wod-kan zaczynają realnie wpływać na miasto,
- * - budynki z dodatnim `wt` potrzebują wody,
- * - wodociągi i oczyszczalnia nadal działają jako infrastruktura wod-kan,
- * - budynek bez aktywnej rury jest liczony jako odcięty od wody.
- *
- * W następnym etapie rozdzielimy czystą wodę i ścieki.
+ * Wodociągi produkują wodę.
+ * Oczyszczalnia NIE produkuje już wody — od teraz obsługuje ścieki.
  */
 
-function getBuildingWaterValue(building) {
+function getBuildingWaterDemand(building) {
   const data = BD[building.type];
   if (!data) return 0;
 
-  return (data.wt || 0) * building.lv;
+  if (building.type === 'waterplant') return 0;
+  if (building.type === 'sewage') return 0;
+
+  return Math.max(0, (data.wt || 0) * building.lv);
 }
 
-function isProducerWaterValue(value) {
-  return value < 0;
+function getBuildingWaterSupply(building) {
+  const data = BD[building.type];
+  if (!data) return 0;
+
+  if (building.type !== 'waterplant') return 0;
+
+  return Math.abs((data.wt || 0) * building.lv);
 }
 
-function isConsumerWaterValue(value) {
-  return value > 0;
-}
-
-function isBuildingConnectedToWater(building, waterValue, activeWaterPipes) {
-  if (isProducerWaterValue(waterValue)) return true;
-  if (!isConsumerWaterValue(waterValue)) return true;
+function isBuildingConnectedToWater(building, demand, activeWaterPipes) {
+  if (demand <= 0) return true;
 
   return isInWaterPipeRange(building.x, building.y, activeWaterPipes);
 }
 
 export function calcWater(activeBuildings, waterPipes = new Set()) {
-  const activeWaterPipes = getSourceConnectedWaterPipes(waterPipes, activeBuildings);
-
-  const entries = activeBuildings
-    .map(building => {
-      const data = BD[building.type];
-      if (!data) return null;
-
-      return {
-        building,
-        uid: building.uid,
-        type: building.type,
-        data,
-        waterValue: getBuildingWaterValue(building),
-      };
-    })
-    .filter(Boolean);
+  const activeWaterPipes = getWaterSupplyConnectedPipes(waterPipes, activeBuildings);
 
   let connectedDemand = 0;
   let disconnectedDemand = 0;
@@ -65,46 +48,48 @@ export function calcWater(activeBuildings, waterPipes = new Set()) {
   const producers = [];
   const disconnectedConsumers = [];
 
-  entries.forEach(entry => {
-    const building = entry.building;
-    const value = entry.waterValue;
-    const connected = isBuildingConnectedToWater(building, value, activeWaterPipes);
+  activeBuildings.forEach(building => {
+    const data = BD[building.type];
+    if (!data) return;
 
-    if (isConsumerWaterValue(value)) {
+    const demand = getBuildingWaterDemand(building);
+    const produced = getBuildingWaterSupply(building);
+
+    if (produced > 0) {
+      supply += produced;
+
+      producers.push({
+        uid: building.uid,
+        type: building.type,
+        name: data.n,
+        icon: data.e,
+        level: building.lv,
+        value: produced,
+        connected: true,
+      });
+    }
+
+    if (demand > 0) {
+      const connected = isBuildingConnectedToWater(building, demand, activeWaterPipes);
+
       const consumer = {
         uid: building.uid,
         type: building.type,
-        name: entry.data.n,
-        icon: entry.data.e,
+        name: data.n,
+        icon: data.e,
         level: building.lv,
-        value,
+        value: demand,
         connected,
       };
 
       consumers.push(consumer);
 
       if (connected) {
-        connectedDemand += value;
+        connectedDemand += demand;
       } else {
-        disconnectedDemand += value;
+        disconnectedDemand += demand;
         disconnectedConsumers.push(consumer);
       }
-    }
-
-    if (isProducerWaterValue(value)) {
-      const produced = Math.abs(value);
-
-      supply += produced;
-
-      producers.push({
-        uid: building.uid,
-        type: building.type,
-        name: entry.data.n,
-        icon: entry.data.e,
-        level: building.lv,
-        value: produced,
-        connected: true,
-      });
     }
   });
 
