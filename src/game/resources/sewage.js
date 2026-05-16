@@ -2,33 +2,20 @@ import { BD } from '../../data.js';
 import {
   getSewageConnectedPipes,
   isInWaterPipeRange,
-  WATERPIPE_RANGE,
 } from './waterPipes.js';
+import {
+  SEWAGE_LOAD_MULTIPLIER,
+  WATERPIPE_RANGE,
+} from './serviceConfig.js';
 
 /**
- * System kanalizacji — Etap 8C.
+ * System kanalizacji.
  *
  * Budynki generują ścieki.
  * Oczyszczalnia odbiera i oczyszcza ścieki.
  * Ta sama sieć rur wod-kan jest używana do kanalizacji,
  * ale tylko rury połączone z oczyszczalnią obsługują ścieki.
  */
-
-const SEWAGE_LOAD_MULTIPLIER = {
-  apartment: 0.9,
-  house: 0.9,
-  factory: 1.1,
-  shop: 0.7,
-  office: 0.7,
-  bank: 0.5,
-  hospital: 1.2,
-  school: 0.8,
-  police: 0.4,
-  fire: 0.4,
-  bus: 0.2,
-  tram: 0.2,
-  metro: 0.3,
-};
 
 function getBuildingSewageLoad(building) {
   const data = BD[building.type];
@@ -49,8 +36,7 @@ function getBuildingSewageCapacity(building) {
 
   if (building.type !== 'sewage') return 0;
 
-  // Obecnie oczyszczalnia ma wt:-40 w data.js.
-  // Używamy tego jako bazowej pojemności oczyszczania.
+  // Oczyszczalnia używa ujemnego wt z data.js jako pojemności oczyszczania.
   return Math.abs(data.wt || 0) * building.lv;
 }
 
