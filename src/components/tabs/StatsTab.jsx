@@ -16,6 +16,30 @@ function getEmissionData(stats) {
       label: stats.co2 <= 30 ? 'Dobre' : stats.co2 <= 70 ? 'Średnie' : 'Złe',
       color: stats.co2 <= 30 ? '#00e87a' : stats.co2 <= 70 ? '#ffd700' : '#ff3d5a',
     },
+    penalty: {
+      env: 0,
+      housing: 0,
+      services: 0,
+    },
+    pollutionPenalty: {
+      env: 0,
+      housing: 0,
+      services: 0,
+    },
+    greenCoverage: {
+      coverage: 100,
+      coveredCount: 0,
+      targetCount: 0,
+      uncoveredCount: 0,
+      sourceCount: 0,
+      bonus: {
+        env: 0,
+        housing: 0,
+        services: 0,
+      },
+      topSources: [],
+      uncoveredTargets: [],
+    },
     emitters: [],
     reducers: [],
     topEmitter: null,
@@ -30,11 +54,23 @@ function getReducerLabel(item) {
   return 'redukcja';
 }
 
+function getCoverageColor(value) {
+  if (value >= 75) return '#00e87a';
+  if (value >= 45) return '#ffd700';
+  return '#ff3d5a';
+}
+
+function signedStat(value) {
+  if (value > 0) return `+${value}`;
+  return `${value}`;
+}
+
 export default function StatsTab({ G }) {
   const s = G.stats;
   if(!s) return null;
 
   const emissions = getEmissionData(s);
+  const greenCoverage = emissions.greenCoverage || {};
 
   const rows = [
     {l:"🏠 Mieszkania",v:s.sat.housing,g:"linear-gradient(90deg,#00b4ff,#00ffcc)"},
@@ -174,6 +210,123 @@ export default function StatsTab({ G }) {
               <div style={{fontSize:11,color:"#3a5f82"}}>Brak redukcji</div>
             )}
           </div>
+        </div>
+
+        <div style={{
+          marginTop:10,
+          background:"rgba(0,232,122,0.05)",
+          border:`1px solid ${getCoverageColor(greenCoverage.coverage ?? 100)}44`,
+          borderRadius:9,
+          padding:9,
+        }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <span style={{fontSize:11,fontWeight:800,color:getCoverageColor(greenCoverage.coverage ?? 100)}}>
+              🌳 LOKALNY ZASIĘG ZIELENI
+            </span>
+            <span style={{fontSize:12,fontFamily:"monospace",fontWeight:900,color:getCoverageColor(greenCoverage.coverage ?? 100)}}>
+              {greenCoverage.coverage ?? 100}%
+            </span>
+          </div>
+
+          <div style={{height:7,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden",marginBottom:8}}>
+            <div style={{
+              width:`${Math.max(0, Math.min(100, greenCoverage.coverage ?? 100))}%`,
+              height:"100%",
+              background:(greenCoverage.coverage ?? 100) >= 75
+                ? "linear-gradient(90deg,#00e87a,#00ffcc)"
+                : (greenCoverage.coverage ?? 100) >= 45
+                  ? "linear-gradient(90deg,#ffd700,#ff9944)"
+                  : "linear-gradient(90deg,#ff9944,#ff3d5a)",
+            }}/>
+          </div>
+
+          <div className="row">
+            <span className="rl">Budynki w zasięgu</span>
+            <span className="rv" style={{color:"#00e87a"}}>
+              {greenCoverage.coveredCount || 0}/{greenCoverage.targetCount || 0}
+            </span>
+          </div>
+
+          <div className="row">
+            <span className="rl">Poza zasięgiem zieleni</span>
+            <span className="rv" style={{color:(greenCoverage.uncoveredCount || 0)>0?'#ff9944':'#3a5f82'}}>
+              {greenCoverage.uncoveredCount || 0}
+            </span>
+          </div>
+
+          <div className="row">
+            <span className="rl">Źródła zieleni</span>
+            <span className="rv" style={{color:"#00e87a"}}>
+              {greenCoverage.sourceCount || 0}
+            </span>
+          </div>
+
+          <div className="row">
+            <span className="rl">Bonus środowiska</span>
+            <span className="rv" style={{color:(greenCoverage.bonus?.env || 0)>0?'#00e87a':'#3a5f82'}}>
+              {signedStat(greenCoverage.bonus?.env || 0)}
+            </span>
+          </div>
+
+          <div className="row">
+            <span className="rl">Bonus mieszkalnictwa</span>
+            <span className="rv" style={{color:(greenCoverage.bonus?.housing || 0)>0?'#00e87a':'#3a5f82'}}>
+              {signedStat(greenCoverage.bonus?.housing || 0)}
+            </span>
+          </div>
+
+          <div className="row">
+            <span className="rl">Bonus usług</span>
+            <span className="rv" style={{color:(greenCoverage.bonus?.services || 0)>0?'#00e87a':'#3a5f82'}}>
+              {signedStat(greenCoverage.bonus?.services || 0)}
+            </span>
+          </div>
+
+          {greenCoverage.topSources?.length > 0 && (
+            <div style={{marginTop:8}}>
+              <div style={{fontSize:10,color:"#6a90b8",fontWeight:800,marginBottom:5}}>
+                NAJLEPSZE ŹRÓDŁA ZIELENI
+              </div>
+
+              {greenCoverage.topSources.slice(0,4).map(source => (
+                <div
+                  key={`${source.uid}-${source.source}`}
+                  style={{
+                    display:"flex",
+                    justifyContent:"space-between",
+                    fontSize:11,
+                    padding:"4px 0",
+                    borderBottom:"1px solid rgba(255,255,255,0.05)",
+                    gap:10,
+                  }}
+                >
+                  <span style={{color:"#c8dff5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {source.icon} {source.name} Lv{source.level} · {source.label}
+                  </span>
+                  <span style={{fontFamily:"monospace",color:"#00e87a",flexShrink:0}}>
+                    {source.coveredTargets} bud.
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {greenCoverage.uncoveredTargets?.length > 0 && (
+            <div style={{
+              marginTop:8,
+              fontSize:10,
+              color:"#ff9944",
+              lineHeight:1.45,
+              background:"rgba(255,153,68,0.06)",
+              border:"1px solid rgba(255,153,68,0.18)",
+              borderRadius:8,
+              padding:8,
+            }}>
+              🌳 Poza zielenią: {greenCoverage.uncoveredTargets.slice(0,4).map(b => `${b.icon} ${b.name}`).join(', ')}
+              {greenCoverage.uncoveredTargets.length > 4 ? ` +${greenCoverage.uncoveredTargets.length - 4} więcej` : ''}.
+              Postaw park bliżej mieszkańców albo dodaj zielone dachy.
+            </div>
+          )}
         </div>
 
         {emissions.emitters?.length > 0 && (
