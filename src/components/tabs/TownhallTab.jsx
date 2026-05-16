@@ -1,6 +1,7 @@
 import React from 'react';
 import { POLICIES, MS, GS } from '../../data.js';
 import { fa, fm } from '../../gameLogic.js';
+import { SMOG_MONITORING_COST } from '../../game/environment/smogResearch.js';
 
 function getPowerData(s) {
   return s.power || {
@@ -106,7 +107,7 @@ function percentColor(value) {
   return '#ff3d5a';
 }
 
-export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFee, onTax, onReset }) {
+export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFee, onTax, onReset, onBuySmogMonitoring }) {
   const s = G.stats;
   if(!s) return null;
 
@@ -186,6 +187,69 @@ export default function TownhallTab({ G, onOpenLoan, onOpenAudit, onPolicy, onFe
         <div className="row"><span className="rl">Emisja CO₂</span><span className="rv" style={{color:s.co2<0?'#00e87a':s.co2<30?'#ffd700':'#ff3d5a'}}>{s.co2>0?'+':''}{s.co2}</span></div>
         <div className="row"><span className="rl">Pogoda</span><span className="rv">{G.weather?.icon} {G.weather?.name}</span></div>
       </div>
+      
+      <div className="panel" style={{
+  border: G.smogScanUnlocked
+    ? "1px solid rgba(0,232,122,0.25)"
+    : "1px solid rgba(255,153,68,0.3)",
+  background: G.smogScanUnlocked
+    ? "rgba(0,232,122,0.04)"
+    : "rgba(255,153,68,0.04)",
+}}>
+  <div className="ptitle" style={{color:G.smogScanUnlocked ? "#00e87a" : "#ff9944"}}>
+    🌫️ MONITORING SMOGU
+  </div>
+
+  {G.smogScanUnlocked ? (
+    <>
+      <div style={{fontSize:11,color:"#6a90b8",lineHeight:1.45,marginBottom:8}}>
+        System monitoringu smogu jest aktywny. Możesz używać trybu podglądu emisji CO₂ z zakładki Buduj.
+      </div>
+
+      <div className="row">
+        <span className="rl">Status</span>
+        <span className="rv" style={{color:"#00e87a"}}>AKTYWNY</span>
+      </div>
+
+      <div className="row">
+        <span className="rl">Tryb mapy</span>
+        <span className="rv" style={{color:"#ffd700"}}>🌫️ Odblokowany</span>
+      </div>
+    </>
+  ) : (
+    <>
+      <div style={{fontSize:11,color:"#6a90b8",lineHeight:1.45,marginBottom:8}}>
+        Odblokowuje specjalny tryb mapy pokazujący największych emitentów CO₂, redukcje i budynki wymagające filtrów.
+      </div>
+
+      <div className="row">
+        <span className="rl">Koszt testowy</span>
+        <span className="rv" style={{color:"#ffd700"}}>{fa(SMOG_MONITORING_COST)} zł</span>
+      </div>
+
+      <button
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          onBuySmogMonitoring();
+        }}
+        style={{
+          width:"100%",
+          marginTop:8,
+          padding:9,
+          border:"1px solid rgba(255,153,68,0.4)",
+          borderRadius:8,
+          background:"rgba(255,153,68,0.08)",
+          color:"#ff9944",
+          fontSize:12,
+          fontWeight:800,
+        }}
+      >
+        🌫️ Wykup monitoring smogu ({fa(SMOG_MONITORING_COST)} zł)
+      </button>
+    </>
+  )}
+</div>
 
       <div className="panel" style={{border: `1px solid ${power.ok ? 'rgba(0,232,122,0.25)' : 'rgba(255,61,90,0.35)'}`}}>
         <div className="ptitle" style={{color: power.ok ? '#00e87a' : '#ff9944'}}>⚡ SYSTEM ENERGII</div>
