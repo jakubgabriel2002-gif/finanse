@@ -20,6 +20,10 @@ import {
   canBuildPowerLine,
 } from './game/resources/powerLines.js';
 import {
+  WATERPIPE_COST,
+  canBuildWaterPipe,
+} from './game/resources/waterPipes.js';
+import {
   shouldShowTutorial,
   startTutorialAction,
   maybeAdvanceBuildingTutorial,
@@ -388,6 +392,42 @@ export default function App() {
         });
       }
 
+      if(prev.buildMode==='waterpipe') {
+        const waterPipes = new Set(prev.waterPipes || []);
+
+        const check = canBuildWaterPipe({
+          x: gx,
+          y: gy,
+          terrain,
+          waterPipes,
+          buildings: prev.buildings,
+        });
+
+        if(!check.ok) {
+          notif(check.reason, "warn");
+          return prev;
+        }
+
+        if(prev.budget < WATERPIPE_COST) {
+          notif(`❌ Za mało środków! (${fa(WATERPIPE_COST)} zł)`, "err");
+          return prev;
+        }
+
+        waterPipes.add(key);
+
+        const newLog=[
+          {id:logIdRef.current++,label:"💧 Rura wod-kan",amount:-WATERPIPE_COST},
+          ...prev.log.slice(0,19),
+        ];
+
+        return recalc({
+          ...prev,
+          waterPipes,
+          budget:prev.budget-WATERPIPE_COST,
+          log:newLog,
+        });
+      }
+
       if(prev.buildMode==='road') {
         if(prev.roads.has(key)){notif("⚠️ Tu już jest droga!","warn");return prev;}
         if(prev.grid[key]){notif("⚠️ Blokuje budynek!","warn");return prev;}
@@ -702,6 +742,7 @@ export default function App() {
         grid:{},
         roads:new Set(),
         powerLines:new Set(),
+        waterPipes:new Set(),
         tutDone:true,
         tutStep:TSTEPS.length,
         buildMode:null,
@@ -823,13 +864,27 @@ export default function App() {
             <Map G={G} cam={cam} now={nowTick} onTileClick={tileClick} onBldClick={bldClick}/>
 
             {G.buildMode && (
-              <div id="build-banner" style={{background:G.buildMode==='road'?'rgba(180,120,0,0.97)':G.buildMode==='powerline'?'rgba(255,160,0,0.97)':'rgba(0,100,180,0.97)'}}>
+              <div
+                id="build-banner"
+                style={{
+                  background:
+                    G.buildMode==='road'
+                      ? 'rgba(180,120,0,0.97)'
+                      : G.buildMode==='powerline'
+                        ? 'rgba(255,160,0,0.97)'
+                        : G.buildMode==='waterpipe'
+                          ? 'rgba(0,120,200,0.97)'
+                          : 'rgba(0,100,180,0.97)'
+                }}
+              >
                 <span>
                   {G.buildMode==='road'
                     ? '🛣️ Kliknij kafelek (200zł)'
                     : G.buildMode==='powerline'
                       ? `🔌 Ciągnij linię energetyczną (${POWERLINE_COST}zł)`
-                      : `${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}
+                      : G.buildMode==='waterpipe'
+                        ? `💧 Ciągnij rury wod-kan (${WATERPIPE_COST}zł)`
+                        : `${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}
                 </span>
                 <button
                   onPointerDown={(e)=>{
