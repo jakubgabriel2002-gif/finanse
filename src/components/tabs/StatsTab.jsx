@@ -23,6 +23,13 @@ function getEmissionData(stats) {
   };
 }
 
+function getReducerLabel(item) {
+  if (item.source === 'filter' && item.filterLevel > 0) return `filtr Lv${item.filterLevel}`;
+  if (item.source === 'greenRoof') return 'zielony dach';
+  if (item.source === 'building') return 'zieleń';
+  return 'redukcja';
+}
+
 export default function StatsTab({ G }) {
   const s = G.stats;
   if(!s) return null;
@@ -144,6 +151,7 @@ export default function StatsTab({ G }) {
                 <div style={{fontSize:11,fontFamily:"monospace",color:"#ff9944"}}>
                   +{fa(emissions.topEmitter.value)} j.
                   {emissions.topEmitter.filterLevel > 0 ? ` · filtr Lv${emissions.topEmitter.filterLevel}` : ''}
+                  {emissions.topEmitter.hasGreenRoof ? ' · dach' : ''}
                 </div>
               </>
             ) : (
@@ -159,8 +167,7 @@ export default function StatsTab({ G }) {
                   {emissions.topReducer.icon} {emissions.topReducer.name}
                 </div>
                 <div style={{fontSize:11,fontFamily:"monospace",color:"#00e87a"}}>
-                  -{fa(emissions.topReducer.value)} j.
-                  {emissions.topReducer.filterLevel > 0 ? ` · filtr Lv${emissions.topReducer.filterLevel}` : ''}
+                  -{fa(emissions.topReducer.value)} j. · {getReducerLabel(emissions.topReducer)}
                 </div>
               </>
             ) : (
@@ -190,8 +197,9 @@ export default function StatsTab({ G }) {
                 <span style={{color:"#c8dff5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                   {item.icon} {item.name} Lv{item.level}
                   {item.filterLevel > 0 ? ` · filtr Lv${item.filterLevel}` : ''}
+                  {item.hasGreenRoof ? ' · dach' : ''}
                 </span>
-                <span style={{fontFamily:"monospace",color:item.filterLevel>0?'#ffd700':'#ff9944',flexShrink:0}}>
+                <span style={{fontFamily:"monospace",color:item.reduction>0?'#ffd700':'#ff9944',flexShrink:0}}>
                   +{fa(item.value)} j.
                 </span>
               </div>
@@ -218,8 +226,7 @@ export default function StatsTab({ G }) {
                 }}
               >
                 <span style={{color:"#c8dff5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {item.icon} {item.name} Lv{item.level}
-                  {item.filterLevel > 0 ? ` · filtr Lv${item.filterLevel}` : ''}
+                  {item.icon} {item.name} Lv{item.level} · {getReducerLabel(item)}
                 </span>
                 <span style={{fontFamily:"monospace",color:"#00e87a",flexShrink:0}}>
                   -{fa(item.value)} j.
@@ -240,7 +247,7 @@ export default function StatsTab({ G }) {
             borderRadius:8,
             padding:8,
           }}>
-            🏭 Słabe powietrze obniża środowisko, mieszkalnictwo i usługi. Najszybciej pomoże filtr CO₂ na największych emitentach, więcej parków i mniej ciężkiej energetyki.
+            🏭 Słabe powietrze obniża środowisko, mieszkalnictwo i usługi. Najszybciej pomoże filtr CO₂ na największych emitentach, zielone dachy, więcej parków i mniej ciężkiej energetyki.
           </div>
         )}
       </div>
