@@ -401,6 +401,7 @@ export default function App() {
           terrain,
           waterPipes,
           buildings: prev.buildings,
+          roads: prev.roads,
         });
 
         if(!check.ok) {
