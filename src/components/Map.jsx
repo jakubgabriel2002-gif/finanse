@@ -11,8 +11,25 @@ import {
   isInWaterPipeRange,
   isNearWaterPipe,
   isNearWaterSource,
-  getSourceConnectedWaterPipes,
+  getWaterSupplyConnectedPipes,
+  getSewageConnectedPipes,
 } from '../game/resources/waterPipes.js';
+
+const SEWAGE_LOAD_MULTIPLIER = {
+  apartment: 0.9,
+  house: 0.9,
+  factory: 1.1,
+  shop: 0.7,
+  office: 0.7,
+  bank: 0.5,
+  hospital: 1.2,
+  school: 0.8,
+  police: 0.4,
+  fire: 0.4,
+  bus: 0.2,
+  tram: 0.2,
+  metro: 0.3,
+};
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
@@ -70,17 +87,38 @@ function PowerLineTile({ gx, gy, tpx, powerLines, activePowerLines }) {
   );
 }
 
-function WaterPipeTile({ gx, gy, tpx, waterPipes, activeWaterPipes }) {
+function WaterPipeTile({ gx, gy, tpx, waterPipes, waterSupplyPipes, sewagePipes }) {
   const h = (dx,dy) => waterPipes.has(`${gx+dx},${gy+dy}`);
   const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
   const key = `${gx},${gy}`;
-  const active = activeWaterPipes.has(key);
+
+  const hasWater = waterSupplyPipes.has(key);
+  const hasSewage = sewagePipes.has(key);
+  const active = hasWater || hasSewage;
+  const both = hasWater && hasSewage;
+
   const c = tpx / 2;
   const w = Math.max(4, tpx * 0.14);
 
-  const mainColor = active ? 'rgba(0,160,255,0.9)' : 'rgba(255,61,90,0.55)';
-  const strokeColor = active ? 'rgba(180,230,255,0.55)' : 'rgba(255,61,90,0.5)';
+  const mainColor = both
+    ? 'rgba(85,185,255,0.95)'
+    : hasWater
+      ? 'rgba(0,160,255,0.9)'
+      : hasSewage
+        ? 'rgba(199,125,255,0.9)'
+        : 'rgba(255,61,90,0.55)';
+
+  const strokeColor = both
+    ? 'rgba(230,245,255,0.7)'
+    : hasWater
+      ? 'rgba(180,230,255,0.55)'
+      : hasSewage
+        ? 'rgba(230,190,255,0.55)'
+        : 'rgba(255,61,90,0.5)';
+
   const textColor = active ? '#001722' : '#220006';
+
+  const label = both ? '✅' : hasWater ? '💧' : hasSewage ? '🧪' : '×';
 
   return (
     <svg
@@ -101,14 +139,50 @@ function WaterPipeTile({ gx, gy, tpx, waterPipes, activeWaterPipes }) {
       {S && <rect x={c-w/2} y={c} width={w} height={c} fill={mainColor}/>}
       {W && <rect x={0} y={c-w/2} width={c} height={w} fill={mainColor}/>}
       {E && <rect x={c} y={c-w/2} width={c} height={w} fill={mainColor}/>}
-      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.23)} fill={textColor}>
-        {active ? '💧' : '×'}
+      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.22)} fill={textColor}>
+        {label}
       </text>
     </svg>
   );
 }
 
-function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, waterStatus, showWaterStatus }) {
+function getStatusShadow({ showPowerStatus, powerStatus, showWaterStatus, waterStatus, showSewageStatus, sewageStatus }) {
+  const shadows = [];
+
+  if (showPowerStatus && powerStatus === 'disconnected') {
+    shadows.push('0 0 0 2px rgba(255,61,90,0.75)');
+  } else if (showPowerStatus && powerStatus === 'connected') {
+    shadows.push('0 0 0 2px rgba(255,180,0,0.75)');
+  }
+
+  if (showWaterStatus && waterStatus === 'disconnected') {
+    shadows.push('0 0 0 3px rgba(255,61,90,0.75)');
+  } else if (showWaterStatus && waterStatus === 'connected') {
+    shadows.push('0 0 0 2px rgba(0,160,255,0.75)');
+  }
+
+  if (showSewageStatus && sewageStatus === 'disconnected') {
+    shadows.push('0 0 0 4px rgba(255,61,90,0.55)');
+  } else if (showSewageStatus && sewageStatus === 'connected') {
+    shadows.push('0 0 0 3px rgba(199,125,255,0.65)');
+  }
+
+  return shadows.length ? shadows.join(', ') : undefined;
+}
+
+function BldTile({
+  b,
+  tpx,
+  isSel,
+  hasRoad,
+  now,
+  powerStatus,
+  showPowerStatus,
+  waterStatus,
+  showWaterStatus,
+  sewageStatus,
+  showSewageStatus,
+}) {
   const d = BD[b.type];
   if(!d) return null;
 
@@ -120,17 +194,14 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, wa
   const prog = b.building ? Math.max(0, Math.min(1, 1-(b.buildEnd-now)/BT[b.lv-1])) : 1;
   const tl = b.building ? Math.max(0, Math.ceil(b.buildEnd-now)) : 0;
 
-  const powerBorder = showPowerStatus && powerStatus === 'connected'
-    ? '0 0 0 2px rgba(255,180,0,0.75)'
-    : showPowerStatus && powerStatus === 'disconnected'
-      ? '0 0 0 2px rgba(255,61,90,0.75)'
-      : undefined;
-
-  const waterBorder = showWaterStatus && waterStatus === 'connected'
-    ? '0 0 0 2px rgba(0,160,255,0.75)'
-    : showWaterStatus && waterStatus === 'disconnected'
-      ? '0 0 0 2px rgba(255,61,90,0.75)'
-      : undefined;
+  const statusShadow = getStatusShadow({
+    showPowerStatus,
+    powerStatus,
+    showWaterStatus,
+    waterStatus,
+    showSewageStatus,
+    sewageStatus,
+  });
 
   return (
     <>
@@ -140,12 +211,12 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, wa
           className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
           style={{
             background:b.building?'rgba(255,180,0,0.1)':clr,
-            boxShadow: waterBorder || powerBorder,
+            boxShadow: statusShadow,
           }}
         >
           {b.lv > 1 && <div className="bld-lv">Lv{b.lv}</div>}
 
-          {(b.solar||b.co2f||showPowerStatus||showWaterStatus) && (
+          {(b.solar||b.co2f||showPowerStatus||showWaterStatus||showSewageStatus) && (
             <div className="bld-badge">
               {b.solar?'☀️':''}
               {b.co2f?'🌿':''}
@@ -153,6 +224,8 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, wa
               {showPowerStatus && powerStatus === 'disconnected' ? '🔌' : ''}
               {showWaterStatus && waterStatus === 'connected' ? '💧' : ''}
               {showWaterStatus && waterStatus === 'disconnected' ? '🚱' : ''}
+              {showSewageStatus && sewageStatus === 'connected' ? '🏗️' : ''}
+              {showSewageStatus && sewageStatus === 'disconnected' ? '🧪' : ''}
             </div>
           )}
 
@@ -166,6 +239,10 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, wa
 
           {showWaterStatus && waterStatus === 'disconnected' && sz > 34 && (
             <span style={{fontSize:6,color:"#7dcfff",marginTop:1}}>brak w.</span>
+          )}
+
+          {showSewageStatus && sewageStatus === 'disconnected' && sz > 34 && (
+            <span style={{fontSize:6,color:"#d7a1ff",marginTop:1}}>brak k.</span>
           )}
 
           {b.building && (
@@ -193,16 +270,49 @@ function getPowerStatusForBuilding(building, activePowerLines) {
     : 'disconnected';
 }
 
-function getWaterStatusForBuilding(building, activeWaterPipes) {
+function getWaterDemandForBuilding(building) {
   const data = BD[building.type];
-  if (!data) return 'none';
+  if (!data) return 0;
 
-  const waterValue = (data.wt || 0) * building.lv;
+  if (building.type === 'waterplant') return 0;
+  if (building.type === 'sewage') return 0;
 
-  if (waterValue < 0) return 'source';
-  if (waterValue === 0) return 'none';
+  return Math.max(0, (data.wt || 0) * building.lv);
+}
 
-  return isInWaterPipeRange(building.x, building.y, activeWaterPipes)
+function getWaterStatusForBuilding(building, waterSupplyPipes) {
+  if (building.type === 'waterplant') return 'source';
+
+  const demand = getWaterDemandForBuilding(building);
+
+  if (demand <= 0) return 'none';
+
+  return isInWaterPipeRange(building.x, building.y, waterSupplyPipes)
+    ? 'connected'
+    : 'disconnected';
+}
+
+function getSewageLoadForBuilding(building) {
+  const data = BD[building.type];
+  if (!data) return 0;
+
+  if (building.type === 'sewage') return 0;
+  if (building.type === 'waterplant') return 0;
+
+  const baseWaterUse = Math.max(0, data.wt || 0);
+  const multiplier = SEWAGE_LOAD_MULTIPLIER[building.type] ?? 0;
+
+  return baseWaterUse * building.lv * multiplier;
+}
+
+function getSewageStatusForBuilding(building, sewagePipes) {
+  if (building.type === 'sewage') return 'source';
+
+  const load = getSewageLoadForBuilding(building);
+
+  if (load <= 0) return 'none';
+
+  return isInWaterPipeRange(building.x, building.y, sewagePipes)
     ? 'connected'
     : 'disconnected';
 }
@@ -219,7 +329,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
   const showPowerLines = G.buildMode === 'powerline';
 
   const waterPipes = G.waterPipes || new Set();
-  const activeWaterPipes = getSourceConnectedWaterPipes(waterPipes, act);
+  const waterSupplyPipes = getWaterSupplyConnectedPipes(waterPipes, act);
+  const sewagePipes = getSewageConnectedPipes(waterPipes, act);
   const showWaterPipes = G.buildMode === 'waterpipe';
 
   const tiles = [];
@@ -233,7 +344,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
 
       const inActivePowerRange = showPowerLines && isInPowerLineRange(gx, gy, activePowerLines);
-      const inActiveWaterRange = showWaterPipes && isInWaterPipeRange(gx, gy, activeWaterPipes);
+      const inWaterRange = showWaterPipes && isInWaterPipeRange(gx, gy, waterSupplyPipes);
+      const inSewageRange = showWaterPipes && isInWaterPipeRange(gx, gy, sewagePipes);
 
       tiles.push(
         <div
@@ -291,12 +403,22 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
             }}/>
           )}
 
-          {inActiveWaterRange && (
+          {showWaterPipes && (inWaterRange || inSewageRange) && (
             <div style={{
               position:"absolute",
               inset:0,
-              background:"rgba(0,160,255,0.13)",
-              border:"1px solid rgba(0,160,255,0.28)",
+              background:
+                inWaterRange && inSewageRange
+                  ? "linear-gradient(135deg,rgba(0,160,255,0.13),rgba(199,125,255,0.13))"
+                  : inWaterRange
+                    ? "rgba(0,160,255,0.13)"
+                    : "rgba(199,125,255,0.12)",
+              border:
+                inWaterRange && inSewageRange
+                  ? "1px solid rgba(180,220,255,0.28)"
+                  : inWaterRange
+                    ? "1px solid rgba(0,160,255,0.28)"
+                    : "1px solid rgba(199,125,255,0.25)",
               pointerEvents:"none",
             }}/>
           )}
@@ -377,7 +499,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           gy={wy}
           tpx={tpx}
           waterPipes={waterPipes}
-          activeWaterPipes={activeWaterPipes}
+          waterSupplyPipes={waterSupplyPipes}
+          sewagePipes={sewagePipes}
         />
       );
     });
@@ -434,7 +557,7 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           const isRoad = G.roads.has(key);
           const isValidStart = isRoad || isNearWaterSource(gx, gy, G.buildings) || isNearWaterPipe(gx, gy, waterPipes);
           const alreadyHasPipe = waterPipes.has(key);
-          
+
           if(!alreadyHasPipe) {
             previews.push(
               <div
@@ -483,8 +606,11 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
     const powerStatus = getPowerStatusForBuilding(b, activePowerLines);
     const showPowerStatus = showPowerLines && ['connected','disconnected'].includes(powerStatus);
 
-    const waterStatus = getWaterStatusForBuilding(b, activeWaterPipes);
+    const waterStatus = getWaterStatusForBuilding(b, waterSupplyPipes);
     const showWaterStatus = showWaterPipes && ['connected','disconnected'].includes(waterStatus);
+
+    const sewageStatus = getSewageStatusForBuilding(b, sewagePipes);
+    const showSewageStatus = showWaterPipes && ['connected','disconnected'].includes(sewageStatus);
 
     return (
       <div
@@ -509,6 +635,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           showPowerStatus={showPowerStatus}
           waterStatus={waterStatus}
           showWaterStatus={showWaterStatus}
+          sewageStatus={sewageStatus}
+          showSewageStatus={showSewageStatus}
         />
       </div>
     );
