@@ -24,6 +24,7 @@ import {
   canBuildWaterPipe,
 } from './game/resources/waterPipes.js';
 import { rollCityServiceEvent } from './game/cityEvents.js';
+import { SMOG_MONITORING_COST } from './game/environment/smogResearch.js';
 import {
   shouldShowTutorial,
   startTutorialAction,
@@ -385,6 +386,10 @@ export default function App() {
       const ter = TR[sz]||TR[24];
       const terrain = ter[gy]?.[gx] ?? 0;
 
+      if(prev.buildMode === 'smog') {
+        return prev;
+      }
+
       if(prev.buildMode==='powerline') {
         const powerLines = new Set(prev.powerLines || []);
 
@@ -651,9 +656,9 @@ export default function App() {
       const upd=buildings.find(x=>x.uid===b.uid);
       const grid={...prev.grid,[`${b.x},${b.y}`]:upd};
 
-      notif(`🌿 Filtr CO₂ zainstalowany!`,"ok");
+      notif(`🌿 Modernizacja ekologiczna wykonana!`,"ok");
 
-      const newLog=[{id:logIdRef.current++,label:`🌿 Filtr — ${BD[b.type].n}`,amount:-FILTER_UPGRADE_COST},...prev.log.slice(0,19)];
+      const newLog=[{id:logIdRef.current++,label:`🌿 Eko upgrade — ${BD[b.type].n}`,amount:-FILTER_UPGRADE_COST},...prev.log.slice(0,19)];
 
       return recalc({...prev,buildings,grid,budget:prev.budget-FILTER_UPGRADE_COST,log:newLog});
     });
@@ -704,6 +709,38 @@ export default function App() {
       setAuditModal(false);
 
       return recalc({...prev,budget:prev.budget-500+extra,auditCD:4,log:newLog});
+    });
+  }, [notif, recalc]);
+
+  const buySmogMonitoring = useCallback(() => {
+    setG(prev => {
+      if(prev.smogScanUnlocked) {
+        notif("🌫️ Monitoring smogu jest już odblokowany.", "warn");
+        return prev;
+      }
+
+      if(prev.budget < SMOG_MONITORING_COST) {
+        notif(`❌ Za mało środków! (${fa(SMOG_MONITORING_COST)} zł)`, "err");
+        return prev;
+      }
+
+      const newLog = [
+        {
+          id: logIdRef.current++,
+          label: "🌫️ System monitoringu smogu",
+          amount: -SMOG_MONITORING_COST,
+        },
+        ...prev.log.slice(0, 19),
+      ];
+
+      notif("🌫️ System monitoringu smogu odblokowany!", "ok");
+
+      return recalc({
+        ...prev,
+        smogScanUnlocked: true,
+        budget: prev.budget - SMOG_MONITORING_COST,
+        log: newLog,
+      });
     });
   }, [notif, recalc]);
 
@@ -904,7 +941,9 @@ export default function App() {
                         ? 'rgba(255,160,0,0.97)'
                         : G.buildMode==='waterpipe'
                           ? 'rgba(0,120,200,0.97)'
-                          : 'rgba(0,100,180,0.97)'
+                          : G.buildMode==='smog'
+                            ? 'rgba(80,20,20,0.97)'
+                            : 'rgba(0,100,180,0.97)'
                 }}
               >
                 <span>
@@ -914,7 +953,9 @@ export default function App() {
                       ? `🔌 Ciągnij linię energetyczną (${POWERLINE_COST}zł)`
                       : G.buildMode==='waterpipe'
                         ? `💧 Ciągnij rury wod-kan (${WATERPIPE_COST}zł)`
-                        : `${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}
+                        : G.buildMode==='smog'
+                          ? '🌫️ Tryb smogu — podgląd emisji CO₂'
+                          : `${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}
                 </span>
                 <button
                   onPointerDown={(e)=>{
@@ -969,7 +1010,15 @@ export default function App() {
             {G.tab==='build' && (
               <BuildTab
                 G={G}
-                onPick={(t)=>openMap({buildMode:t})}
+                onPick={(t)=>{
+                  if(t === 'smog' && !G.smogScanUnlocked) {
+                    setG(g => ({...g, tab:'townhall'}));
+                    notif("🌫️ Najpierw kup monitoring smogu w Ratuszu.", "warn");
+                    return;
+                  }
+
+                  openMap({buildMode:t});
+                }}
               />
             )}
 
@@ -977,6 +1026,7 @@ export default function App() {
               <TownhallTab
                 G={G}
                 setG={setG}
+                onBuySmogMonitoring={buySmogMonitoring}
                 onOpenLoan={(amt)=>setLoanModal(amt)}
                 onOpenAudit={()=>setAuditModal(true)}
                 onPolicy={(id)=>setG(g=>recalc({...g,policies:{...g.policies,[id]:!g.policies[id]}}))}
