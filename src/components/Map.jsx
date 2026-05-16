@@ -2,10 +2,10 @@ import React from 'react';
 import { TILE, TC, TB, BD, BT, GS, TR } from '../data.js';
 import { nR, nT, ft } from '../gameLogic.js';
 import {
-  POWERLINE_RANGE,
   isInPowerLineRange,
   isNearPowerLine,
   isNearPowerSource,
+  getSourceConnectedPowerLines,
 } from '../game/resources/powerLines.js';
 
 function RoadTile({ gx, gy, tpx, roads }) {
@@ -26,11 +26,17 @@ function RoadTile({ gx, gy, tpx, roads }) {
   );
 }
 
-function PowerLineTile({ gx, gy, tpx, powerLines }) {
+function PowerLineTile({ gx, gy, tpx, powerLines, activePowerLines }) {
   const h = (dx,dy) => powerLines.has(`${gx+dx},${gy+dy}`);
   const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
+  const key = `${gx},${gy}`;
+  const active = activePowerLines.has(key);
   const c = tpx / 2;
   const w = Math.max(3, tpx * 0.12);
+
+  const mainColor = active ? 'rgba(255,180,0,0.95)' : 'rgba(255,61,90,0.55)';
+  const strokeColor = active ? 'rgba(255,255,255,0.5)' : 'rgba(255,61,90,0.5)';
+  const textColor = active ? '#1a1000' : '#220006';
 
   return (
     <svg
@@ -42,20 +48,23 @@ function PowerLineTile({ gx, gy, tpx, powerLines }) {
         height:tpx,
         pointerEvents:"none",
         zIndex:5,
+        filter: active ? 'drop-shadow(0 0 4px rgba(255,180,0,0.35))' : 'grayscale(0.5)',
       }}
       viewBox={`0 0 ${tpx} ${tpx}`}
     >
-      <circle cx={c} cy={c} r={Math.max(4, tpx*0.16)} fill="rgba(255,180,0,0.9)" stroke="rgba(255,255,255,0.45)" strokeWidth="1"/>
-      {N && <rect x={c-w/2} y={0} width={w} height={c} fill="rgba(255,180,0,0.9)"/>}
-      {S && <rect x={c-w/2} y={c} width={w} height={c} fill="rgba(255,180,0,0.9)"/>}
-      {W && <rect x={0} y={c-w/2} width={c} height={w} fill="rgba(255,180,0,0.9)"/>}
-      {E && <rect x={c} y={c-w/2} width={c} height={w} fill="rgba(255,180,0,0.9)"/>}
-      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.23)} fill="#1a1000">⚡</text>
+      <circle cx={c} cy={c} r={Math.max(4, tpx*0.16)} fill={mainColor} stroke={strokeColor} strokeWidth="1"/>
+      {N && <rect x={c-w/2} y={0} width={w} height={c} fill={mainColor}/>}
+      {S && <rect x={c-w/2} y={c} width={w} height={c} fill={mainColor}/>}
+      {W && <rect x={0} y={c-w/2} width={c} height={w} fill={mainColor}/>}
+      {E && <rect x={c} y={c-w/2} width={c} height={w} fill={mainColor}/>}
+      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.23)} fill={textColor}>
+        {active ? '⚡' : '×'}
+      </text>
     </svg>
   );
 }
 
-function BldTile({ b, tpx, isSel, hasRoad, now }) {
+function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus }) {
   const d = BD[b.type];
   if(!d) return null;
 
@@ -67,16 +76,42 @@ function BldTile({ b, tpx, isSel, hasRoad, now }) {
   const prog = b.building ? Math.max(0, Math.min(1, 1-(b.buildEnd-now)/BT[b.lv-1])) : 1;
   const tl = b.building ? Math.max(0, Math.ceil(b.buildEnd-now)) : 0;
 
+  const powerBorder = showPowerStatus && powerStatus === 'connected'
+    ? '0 0 0 2px rgba(255,180,0,0.75)'
+    : showPowerStatus && powerStatus === 'disconnected'
+      ? '0 0 0 2px rgba(255,61,90,0.75)'
+      : undefined;
+
   return (
     <>
       {b.building && tpx > 26 && <div className="bld-timer">⏱ {ft(tl)}</div>}
       <div style={{position:"absolute",left:off,top:off,width:sz,height:sz}}>
-        <div className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
-             style={{background:b.building?'rgba(255,180,0,0.1)':clr}}>
+        <div
+          className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
+          style={{
+            background:b.building?'rgba(255,180,0,0.1)':clr,
+            boxShadow: powerBorder,
+          }}
+        >
           {b.lv > 1 && <div className="bld-lv">Lv{b.lv}</div>}
-          {(b.solar||b.co2f) && <div className="bld-badge">{b.solar?'☀️':''}{b.co2f?'🌿':''}</div>}
+
+          {(b.solar||b.co2f||showPowerStatus) && (
+            <div className="bld-badge">
+              {b.solar?'☀️':''}
+              {b.co2f?'🌿':''}
+              {showPowerStatus && powerStatus === 'connected' ? '⚡' : ''}
+              {showPowerStatus && powerStatus === 'disconnected' ? '🔌' : ''}
+            </div>
+          )}
+
           <span style={{fontSize:Math.max(9,sz*0.36),lineHeight:1}}>{d.e}</span>
+
           {noR && sz > 32 && <span style={{fontSize:6,color:"#888",marginTop:1}}>brak dr.</span>}
+
+          {showPowerStatus && powerStatus === 'disconnected' && sz > 34 && (
+            <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>brak pr.</span>
+          )}
+
           {b.building && (
             <div className="bld-prog">
               <div className="bld-progfill" style={{width:`${prog*100}%`}}/>
@@ -88,6 +123,20 @@ function BldTile({ b, tpx, isSel, hasRoad, now }) {
   );
 }
 
+function getPowerStatusForBuilding(building, activePowerLines) {
+  const data = BD[building.type];
+  if (!data) return 'none';
+
+  const powerValue = (data.pw || 0) * building.lv;
+
+  if (powerValue < 0) return 'source';
+  if (powerValue === 0) return 'none';
+
+  return isInPowerLineRange(building.x, building.y, activePowerLines)
+    ? 'connected'
+    : 'disconnected';
+}
+
 export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
   const tpx = TILE * cam.zoom;
   const sz = GS(G.thLv);
@@ -95,6 +144,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
   const now = Date.now() / 1000;
   const act = G.buildings.filter(b => !b.building);
   const powerLines = G.powerLines || new Set();
+  const activePowerLines = getSourceConnectedPowerLines(powerLines, act);
   const showPowerLines = G.buildMode === 'powerline';
 
   const tiles = [];
@@ -106,7 +156,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
       const isRd = G.roads.has(key);
       const bg = isRd ? '#1a1a1a' : (TC[t]||TC[0]);
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
-      const inPowerRange = showPowerLines && isInPowerLineRange(gx, gy, powerLines);
+      const inActivePowerRange = showPowerLines && isInPowerLineRange(gx, gy, activePowerLines);
 
       tiles.push(
         <div
@@ -154,11 +204,11 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
             }}/>
           )}
 
-          {inPowerRange && (
+          {inActivePowerRange && (
             <div style={{
               position:"absolute",
               inset:0,
-              background:"rgba(255,180,0,0.14)",
+              background:"rgba(255,180,0,0.13)",
               border:"1px solid rgba(255,180,0,0.28)",
               pointerEvents:"none",
             }}/>
@@ -213,6 +263,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
           gy={py}
           tpx={tpx}
           powerLines={powerLines}
+          activePowerLines={activePowerLines}
         />
       );
     });
@@ -293,6 +344,8 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
 
     const hasR = d.nr || nR(b.x,b.y,G.roads) || nT(b.x,b.y,act);
     const isSel = G.selUID === b.uid;
+    const powerStatus = getPowerStatusForBuilding(b, activePowerLines);
+    const showPowerStatus = showPowerLines && ['connected','disconnected'].includes(powerStatus);
 
     return (
       <div
@@ -307,7 +360,15 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
         }}
         onClick={(e)=>{e.stopPropagation();onBldClick(b.uid);}}
       >
-        <BldTile b={b} tpx={tpx} isSel={isSel} hasRoad={hasR} now={now}/>
+        <BldTile
+          b={b}
+          tpx={tpx}
+          isSel={isSel}
+          hasRoad={hasR}
+          now={now}
+          powerStatus={powerStatus}
+          showPowerStatus={showPowerStatus}
+        />
       </div>
     );
   });
