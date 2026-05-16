@@ -3,6 +3,8 @@ import {
   getFilterLevel,
   getFilterEmissionMultiplier,
   getFilterReductionPercent,
+  getGreenRoofAbsorption,
+  hasGreenRoof,
 } from '../buildingUpgrades.js';
 
 const CO2_TYPE_MULTIPLIER = {
@@ -158,24 +160,34 @@ export function getBuildingEmissionPreview(building) {
   if (!building || !data) {
     return {
       baseEmission: 0,
+      filteredEmission: 0,
       finalEmission: 0,
+      filterReduction: 0,
+      greenRoofAbsorption: 0,
       reduction: 0,
       filterLevel: 0,
       filterReductionPercent: 0,
+      hasGreenRoof: false,
     };
   }
 
   const baseEmission = getBaseEmission(building);
-  const finalEmission = getFilteredEmission(building, baseEmission);
-  const reduction = Math.max(0, baseEmission - finalEmission);
+  const filteredEmission = getFilteredEmission(building, baseEmission);
+  const filterReduction = Math.max(0, baseEmission - filteredEmission);
+  const greenRoofAbsorption = getGreenRoofAbsorption(building);
+  const finalEmission = filteredEmission - greenRoofAbsorption;
   const filterLevel = getFilterLevel(building);
 
   return {
     baseEmission: Math.floor(baseEmission),
+    filteredEmission: Math.floor(filteredEmission),
     finalEmission: Math.floor(finalEmission),
-    reduction: Math.floor(reduction),
+    filterReduction: Math.floor(filterReduction),
+    greenRoofAbsorption: Math.floor(greenRoofAbsorption),
+    reduction: Math.floor(filterReduction + greenRoofAbsorption),
     filterLevel,
     filterReductionPercent: getFilterReductionPercent(filterLevel),
+    hasGreenRoof: hasGreenRoof(building),
   };
 }
 
@@ -193,12 +205,13 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
 
     const preview = getBuildingEmissionPreview(building);
     const baseEmission = preview.baseEmission;
-    const finalEmission = preview.finalEmission;
-    const reduction = preview.reduction;
+    const filteredEmission = preview.filteredEmission;
+    const filterReduction = preview.filterReduction;
+    const greenRoofAbsorption = preview.greenRoofAbsorption;
 
     if (baseEmission > 0) {
-      gross += finalEmission;
-      filteredReduction += reduction;
+      gross += Math.max(0, filteredEmission);
+      filteredReduction += filterReduction;
 
       emitters.push({
         uid: building.uid,
@@ -206,25 +219,45 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
         icon: data.e,
         name: data.n,
         level: building.lv,
-        value: finalEmission,
+        value: Math.max(0, preview.finalEmission),
         baseValue: baseEmission,
-        reduction,
+        filteredValue: filteredEmission,
+        reduction: preview.reduction,
+        filterReduction,
+        greenRoofAbsorption,
         hasFilter: preview.filterLevel > 0,
+        hasGreenRoof: preview.hasGreenRoof,
         filterLevel: preview.filterLevel,
         filterReductionPercent: preview.filterReductionPercent,
       });
 
-      if (reduction > 0) {
+      if (filterReduction > 0) {
         reducers.push({
           uid: building.uid,
           type: building.type,
           icon: data.e,
           name: data.n,
           level: building.lv,
-          value: reduction,
+          value: filterReduction,
           source: 'filter',
           filterLevel: preview.filterLevel,
           filterReductionPercent: preview.filterReductionPercent,
+        });
+      }
+
+      if (greenRoofAbsorption > 0) {
+        absorption += greenRoofAbsorption;
+
+        reducers.push({
+          uid: building.uid,
+          type: building.type,
+          icon: data.e,
+          name: data.n,
+          level: building.lv,
+          value: greenRoofAbsorption,
+          source: 'greenRoof',
+          filterLevel: 0,
+          filterReductionPercent: 0,
         });
       }
     }
@@ -260,7 +293,10 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
     ...item,
     value: Math.floor(item.value),
     baseValue: Math.floor(item.baseValue),
+    filteredValue: Math.floor(item.filteredValue),
     reduction: Math.floor(item.reduction),
+    filterReduction: Math.floor(item.filterReduction),
+    greenRoofAbsorption: Math.floor(item.greenRoofAbsorption),
   }));
 
   const sortedReducers = sortByValueDesc(reducers).map(item => ({
