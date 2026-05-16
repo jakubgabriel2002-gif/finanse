@@ -15,6 +15,7 @@ import {
   getSewageConnectedPipes,
 } from '../game/resources/waterPipes.js';
 import { SEWAGE_LOAD_MULTIPLIER } from '../game/resources/serviceConfig.js';
+import { getBuildingEmissionPreview } from '../game/environment/emissions.js';
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
@@ -155,6 +156,26 @@ function getStatusShadow({ showPowerStatus, powerStatus, showWaterStatus, waterS
   return shadows.length ? shadows.join(', ') : undefined;
 }
 
+function getSmogStatusForBuilding(building) {
+  const preview = getBuildingEmissionPreview(building);
+
+  if (preview.finalEmission >= 45) return 'high';
+  if (preview.finalEmission >= 18) return 'medium';
+  if (preview.finalEmission > 0) return 'low';
+  if (preview.reduction > 0 || preview.finalEmission < 0) return 'reducer';
+
+  return 'none';
+}
+
+function getSmogShadow(smogStatus) {
+  if (smogStatus === 'high') return '0 0 0 3px rgba(255,61,90,0.8), 0 0 14px rgba(255,61,90,0.55)';
+  if (smogStatus === 'medium') return '0 0 0 3px rgba(255,153,68,0.7), 0 0 10px rgba(255,153,68,0.35)';
+  if (smogStatus === 'low') return '0 0 0 2px rgba(255,215,0,0.65)';
+  if (smogStatus === 'reducer') return '0 0 0 3px rgba(0,232,122,0.65), 0 0 10px rgba(0,232,122,0.35)';
+
+  return undefined;
+}
+
 function BldTile({
   b,
   tpx,
@@ -167,6 +188,8 @@ function BldTile({
   showWaterStatus,
   sewageStatus,
   showSewageStatus,
+  smogStatus,
+  showSmogStatus,
 }) {
   const d = BD[b.type];
   if(!d) return null;
@@ -196,21 +219,26 @@ function BldTile({
           className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
           style={{
             background:b.building?'rgba(255,180,0,0.1)':clr,
-            boxShadow: statusShadow,
+            boxShadow: showSmogStatus ? getSmogShadow(smogStatus) : statusShadow,
           }}
         >
           {b.lv > 1 && <div className="bld-lv">Lv{b.lv}</div>}
 
-          {(b.solar||b.co2f||showPowerStatus||showWaterStatus||showSewageStatus) && (
+          {(b.solar||b.co2f||b.greenRoof||showPowerStatus||showWaterStatus||showSewageStatus||showSmogStatus) && (
             <div className="bld-badge">
               {b.solar?'☀️':''}
               {b.co2f?'🌿':''}
+              {b.greenRoof?'🌱':''}
               {showPowerStatus && powerStatus === 'connected' ? '⚡' : ''}
               {showPowerStatus && powerStatus === 'disconnected' ? '🔌' : ''}
               {showWaterStatus && waterStatus === 'connected' ? '💧' : ''}
               {showWaterStatus && waterStatus === 'disconnected' ? '🚱' : ''}
               {showSewageStatus && sewageStatus === 'connected' ? '🏗️' : ''}
               {showSewageStatus && sewageStatus === 'disconnected' ? '🧪' : ''}
+              {showSmogStatus && smogStatus === 'high' ? '🏭' : ''}
+              {showSmogStatus && smogStatus === 'medium' ? '⚠️' : ''}
+              {showSmogStatus && smogStatus === 'low' ? '🌫️' : ''}
+              {showSmogStatus && smogStatus === 'reducer' ? '🌿' : ''}
             </div>
           )}
 
@@ -228,6 +256,14 @@ function BldTile({
 
           {showSewageStatus && sewageStatus === 'disconnected' && sz > 34 && (
             <span style={{fontSize:6,color:"#d7a1ff",marginTop:1}}>brak k.</span>
+          )}
+
+          {showSmogStatus && smogStatus === 'high' && sz > 34 && (
+            <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>wys. CO₂</span>
+          )}
+
+          {showSmogStatus && smogStatus === 'reducer' && sz > 34 && (
+            <span style={{fontSize:6,color:"#00e87a",marginTop:1}}>redukcja</span>
           )}
 
           {b.building && (
@@ -318,6 +354,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
   const sewagePipes = getSewageConnectedPipes(waterPipes, act);
   const showWaterPipes = G.buildMode === 'waterpipe';
 
+  const showSmog = G.buildMode === 'smog';
+
   const tiles = [];
 
   for(let gy=0; gy<sz; gy++) {
@@ -374,6 +412,15 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
               position:"absolute",
               inset:0,
               background:"rgba(0,40,80,0.1)",
+              pointerEvents:"none",
+            }}/>
+          )}
+
+          {showSmog && (
+            <div style={{
+              position:"absolute",
+              inset:0,
+              background:"rgba(20,10,10,0.22)",
               pointerEvents:"none",
             }}/>
           )}
@@ -493,7 +540,7 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
 
   const previews = [];
 
-  if(G.buildMode) {
+  if(G.buildMode && G.buildMode !== 'smog') {
     for(let gy=0; gy<sz; gy++) {
       for(let gx=0; gx<sz; gx++) {
         const key = `${gx},${gy}`;
@@ -597,6 +644,9 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
     const sewageStatus = getSewageStatusForBuilding(b, sewagePipes);
     const showSewageStatus = showWaterPipes && ['connected','disconnected'].includes(sewageStatus);
 
+    const smogStatus = getSmogStatusForBuilding(b);
+    const showSmogStatus = showSmog && smogStatus !== 'none';
+
     return (
       <div
         key={b.uid}
@@ -622,6 +672,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           showWaterStatus={showWaterStatus}
           sewageStatus={sewageStatus}
           showSewageStatus={showSewageStatus}
+          smogStatus={smogStatus}
+          showSmogStatus={showSmogStatus}
         />
       </div>
     );
