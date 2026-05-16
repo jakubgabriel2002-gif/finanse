@@ -1,6 +1,7 @@
 import React from 'react';
 import { BD, LIM, BL } from '../../data.js';
 import { fa } from '../../gameLogic.js';
+import { POWERLINE_COST, POWERLINE_RANGE } from '../../game/resources/powerLines.js';
 
 export default function BuildTab({ G, onPick }) {
   const cats = [...new Set(Object.values(BD).map(d => d.c))];
@@ -10,8 +11,9 @@ export default function BuildTab({ G, onPick }) {
       <div className="tab-title">🏗️ Buduj</div>
 
       <div style={{fontSize:10,color:"#3a5f82",marginBottom:6,fontFamily:"monospace"}}>INFRASTRUKTURA</div>
+
       <div className={`bcard ${G.buildMode==='road'?'act':''}`}
-        style={{borderColor:"rgba(255,215,0,0.3)",marginBottom:12}}
+        style={{borderColor:"rgba(255,215,0,0.3)",marginBottom:6}}
         onClick={() => onPick('road')}>
         <span style={{fontSize:22}}>🛣️</span>
         <div style={{flex:1}}>
@@ -19,6 +21,21 @@ export default function BuildTab({ G, onPick }) {
           <div style={{display:"flex",gap:5,marginTop:3}}>
             <span className="tag" style={{background:"rgba(255,215,0,0.15)",color:"#ffd700"}}>200 zł/kafelek</span>
             <span className="tag" style={{background:"rgba(0,232,122,0.1)",color:"#00e87a"}}>natychmiast</span>
+          </div>
+        </div>
+        <span style={{fontSize:18,color:"#ffd700"}}>→</span>
+      </div>
+
+      <div className={`bcard ${G.buildMode==='powerline'?'act':''}`}
+        style={{borderColor:"rgba(255,180,0,0.35)",marginBottom:12}}
+        onClick={() => onPick('powerline')}>
+        <span style={{fontSize:22}}>🔌</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:600}}>Linia energetyczna</div>
+          <div style={{display:"flex",gap:5,marginTop:3,flexWrap:"wrap"}}>
+            <span className="tag" style={{background:"rgba(255,215,0,0.15)",color:"#ffd700"}}>{POWERLINE_COST} zł/kafelek</span>
+            <span className="tag" style={{background:"rgba(255,180,0,0.13)",color:"#ffb400"}}>zasięg {POWERLINE_RANGE} kratki</span>
+            <span className="tag" style={{background:"rgba(0,232,122,0.1)",color:"#00e87a"}}>nie blokuje miejsca</span>
           </div>
         </div>
         <span style={{fontSize:18,color:"#ffd700"}}>→</span>
