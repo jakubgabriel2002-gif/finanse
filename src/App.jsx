@@ -177,7 +177,7 @@ export default function App() {
 
   useEffect(() => {
     setG(g => {
-      const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines);
+      const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines, g.waterPipes);
       const inbox = genInbox({...g, stats});
       return {...g, stats, inbox};
     });
@@ -202,7 +202,7 @@ export default function App() {
   }, []);
 
   const recalc = useCallback((g) => {
-    const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines);
+    const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines, g.waterPipes);
     const inbox = genInbox({...g, stats});
     return {...g, stats, inbox};
   }, []);
@@ -684,7 +684,7 @@ export default function App() {
     clearSavedGame();
 
     const fresh = createInitialGameState();
-    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather, fresh.powerLines);
+    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather, fresh.powerLines, fresh.waterPipes);
     const next = {...fresh,stats,inbox:genInbox({...fresh,stats})};
 
     setG(next);
