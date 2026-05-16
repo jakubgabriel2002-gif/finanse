@@ -7,6 +7,7 @@ export const INIT_STATE = {
   buildings: [],
   grid: {},
   roads: new Set(),
+  powerLines: new Set(),
   thLv: 1,
   month: 1,
   year: 1,
@@ -51,6 +52,7 @@ export function createInitialGameState(overrides = {}) {
     buildings: [],
     grid: {},
     roads: new Set(),
+    powerLines: new Set(),
     log: [{ id: 0, label: '🏙️ NeoCity — nowa gra!', amount: 0 }],
     policies: { ...INIT_STATE.policies },
     fees: { ...INIT_STATE.fees },
@@ -80,12 +82,14 @@ function restoreTutorialBuildMode(save, roads) {
 export function normalizeLoadedGameState(save) {
   const base = createInitialGameState();
   const roads = new Set(Array.isArray(save?.roads) ? save.roads : []);
+  const powerLines = new Set(Array.isArray(save?.powerLines) ? save.powerLines : []);
   const buildMode = restoreTutorialBuildMode(save, roads);
 
   return {
     ...base,
     ...save,
     roads,
+    powerLines,
     weather: save?.weather || WEATHERS[0],
     buildMode,
     buildings: Array.isArray(save?.buildings) ? save.buildings : [],
@@ -121,6 +125,7 @@ export function prepareGameForSave(gameState) {
   return {
     ...gameState,
     roads: [...gameState.roads],
+    powerLines: [...(gameState.powerLines || new Set())],
     buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
