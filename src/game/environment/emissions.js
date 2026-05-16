@@ -24,6 +24,23 @@ const CO2_TYPE_MULTIPLIER = {
   sewage: 0.75,
 };
 
+const GREEN_TARGET_TYPES = [
+  'apartment',
+  'house',
+  'shop',
+  'office',
+  'bank',
+  'hospital',
+  'school',
+  'police',
+  'fire',
+  'townhall',
+];
+
+function getDistance(a, b) {
+  return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+}
+
 function getBuildingEmissionMultiplier(type) {
   return CO2_TYPE_MULTIPLIER[type] ?? 1;
 }
@@ -151,8 +168,184 @@ function getPollutionPenalty(netEmission, airQuality) {
   };
 }
 
+function getGreenCoverageBonus(coverage) {
+  if (coverage >= 90) {
+    return {
+      env: 8,
+      housing: 5,
+      services: 4,
+    };
+  }
+
+  if (coverage >= 70) {
+    return {
+      env: 6,
+      housing: 4,
+      services: 3,
+    };
+  }
+
+  if (coverage >= 45) {
+    return {
+      env: 4,
+      housing: 2,
+      services: 2,
+    };
+  }
+
+  if (coverage >= 20) {
+    return {
+      env: 2,
+      housing: 1,
+      services: 1,
+    };
+  }
+
+  return {
+    env: 0,
+    housing: 0,
+    services: 0,
+  };
+}
+
 function sortByValueDesc(items) {
   return [...items].sort((a, b) => b.value - a.value);
+}
+
+function sortByCoveredDesc(items) {
+  return [...items].sort((a, b) => b.coveredTargets - a.coveredTargets);
+}
+
+function getGreenSourceForBuilding(building) {
+  const data = BD[building.type];
+  if (!data) return null;
+
+  if (building.type === 'park') {
+    return {
+      uid: building.uid,
+      type: building.type,
+      icon: data.e,
+      name: data.n,
+      level: building.lv,
+      x: building.x,
+      y: building.y,
+      range: 3 + Math.min(3, building.lv || 1),
+      value: 12 * Math.max(1, building.lv || 1),
+      source: 'park',
+      label: 'park',
+    };
+  }
+
+  if (hasGreenRoof(building)) {
+    return {
+      uid: building.uid,
+      type: building.type,
+      icon: data.e,
+      name: data.n,
+      level: building.lv,
+      x: building.x,
+      y: building.y,
+      range: 2,
+      value: getGreenRoofAbsorption(building),
+      source: 'greenRoof',
+      label: 'zielony dach',
+    };
+  }
+
+  return null;
+}
+
+function isGreenTarget(building) {
+  return GREEN_TARGET_TYPES.includes(building.type);
+}
+
+function calcGreenCoverage(activeBuildings) {
+  const targets = activeBuildings
+    .filter(isGreenTarget)
+    .map(building => {
+      const data = BD[building.type];
+
+      return {
+        uid: building.uid,
+        type: building.type,
+        icon: data?.e || '🏢',
+        name: data?.n || building.type,
+        level: building.lv,
+        x: building.x,
+        y: building.y,
+      };
+    });
+
+  const sources = activeBuildings
+    .map(getGreenSourceForBuilding)
+    .filter(Boolean);
+
+  if (!targets.length) {
+    return {
+      coverage: 100,
+      coveredCount: 0,
+      targetCount: 0,
+      uncoveredCount: 0,
+      sourceCount: sources.length,
+      bonus: getGreenCoverageBonus(100),
+      targets: [],
+      sources: sources.map(source => ({
+        ...source,
+        coveredTargets: 0,
+      })),
+      topSources: [],
+      uncoveredTargets: [],
+    };
+  }
+
+  const sourceCoverage = new Map(
+    sources.map(source => [source.uid, 0])
+  );
+
+  const evaluatedTargets = targets.map(target => {
+    const coveringSources = sources.filter(source =>
+      getDistance(target, source) <= source.range
+    );
+
+    coveringSources.forEach(source => {
+      sourceCoverage.set(source.uid, (sourceCoverage.get(source.uid) || 0) + 1);
+    });
+
+    return {
+      ...target,
+      covered: coveringSources.length > 0,
+      coveringSources: coveringSources.map(source => ({
+        uid: source.uid,
+        type: source.type,
+        icon: source.icon,
+        name: source.name,
+        source: source.source,
+        range: source.range,
+      })),
+    };
+  });
+
+  const coveredCount = evaluatedTargets.filter(target => target.covered).length;
+  const targetCount = evaluatedTargets.length;
+  const coverage = Math.round((coveredCount / targetCount) * 100);
+
+  const sourcesWithCoverage = sources.map(source => ({
+    ...source,
+    coveredTargets: sourceCoverage.get(source.uid) || 0,
+  }));
+
+  return {
+    coverage,
+    coveredCount,
+    targetCount,
+    uncoveredCount: targetCount - coveredCount,
+    sourceCount: sources.length,
+    bonus: getGreenCoverageBonus(coverage),
+    targets: evaluatedTargets,
+    sources: sourcesWithCoverage,
+    topSources: sortByCoveredDesc(sourcesWithCoverage).filter(source => source.coveredTargets > 0),
+    uncoveredTargets: evaluatedTargets.filter(target => !target.covered),
+  };
 }
 
 export function getBuildingEmissionPreview(building) {
@@ -287,7 +480,14 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
   const net = totalGross - absorption;
   const airQuality = Math.round(getAirQuality(net));
   const level = getAirLevel(airQuality);
-  const penalty = getPollutionPenalty(net, airQuality);
+  const pollutionPenalty = getPollutionPenalty(net, airQuality);
+  const greenCoverage = calcGreenCoverage(activeBuildings);
+
+  const penalty = {
+    env: pollutionPenalty.env + greenCoverage.bonus.env,
+    housing: pollutionPenalty.housing + greenCoverage.bonus.housing,
+    services: pollutionPenalty.services + greenCoverage.bonus.services,
+  };
 
   const sortedEmitters = sortByValueDesc(emitters).map(item => ({
     ...item,
@@ -317,6 +517,8 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
     airQuality,
     level,
     penalty,
+    pollutionPenalty,
+    greenCoverage,
 
     ok: airQuality >= 70,
     warning: airQuality < 70 && airQuality >= 45,
