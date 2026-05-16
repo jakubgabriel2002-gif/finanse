@@ -431,9 +431,10 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
             );
           }
         } else if(G.buildMode === 'waterpipe') {
-          const isValidStart = isNearWaterSource(gx, gy, G.buildings) || isNearWaterPipe(gx, gy, waterPipes);
+          const isRoad = G.roads.has(key);
+          const isValidStart = isRoad || isNearWaterSource(gx, gy, G.buildings) || isNearWaterPipe(gx, gy, waterPipes);
           const alreadyHasPipe = waterPipes.has(key);
-
+          
           if(!alreadyHasPipe) {
             previews.push(
               <div
