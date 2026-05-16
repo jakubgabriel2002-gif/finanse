@@ -7,6 +7,12 @@ import {
   isNearPowerSource,
   getSourceConnectedPowerLines,
 } from '../game/resources/powerLines.js';
+import {
+  isInWaterPipeRange,
+  isNearWaterPipe,
+  isNearWaterSource,
+  getSourceConnectedWaterPipes,
+} from '../game/resources/waterPipes.js';
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
@@ -64,7 +70,45 @@ function PowerLineTile({ gx, gy, tpx, powerLines, activePowerLines }) {
   );
 }
 
-function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus }) {
+function WaterPipeTile({ gx, gy, tpx, waterPipes, activeWaterPipes }) {
+  const h = (dx,dy) => waterPipes.has(`${gx+dx},${gy+dy}`);
+  const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
+  const key = `${gx},${gy}`;
+  const active = activeWaterPipes.has(key);
+  const c = tpx / 2;
+  const w = Math.max(4, tpx * 0.14);
+
+  const mainColor = active ? 'rgba(0,160,255,0.9)' : 'rgba(255,61,90,0.55)';
+  const strokeColor = active ? 'rgba(180,230,255,0.55)' : 'rgba(255,61,90,0.5)';
+  const textColor = active ? '#001722' : '#220006';
+
+  return (
+    <svg
+      style={{
+        position:"absolute",
+        left:gx*tpx,
+        top:gy*tpx,
+        width:tpx,
+        height:tpx,
+        pointerEvents:"none",
+        zIndex:5,
+        filter: active ? 'drop-shadow(0 0 4px rgba(0,160,255,0.35))' : 'grayscale(0.5)',
+      }}
+      viewBox={`0 0 ${tpx} ${tpx}`}
+    >
+      <circle cx={c} cy={c} r={Math.max(4, tpx*0.16)} fill={mainColor} stroke={strokeColor} strokeWidth="1"/>
+      {N && <rect x={c-w/2} y={0} width={w} height={c} fill={mainColor}/>}
+      {S && <rect x={c-w/2} y={c} width={w} height={c} fill={mainColor}/>}
+      {W && <rect x={0} y={c-w/2} width={c} height={w} fill={mainColor}/>}
+      {E && <rect x={c} y={c-w/2} width={c} height={w} fill={mainColor}/>}
+      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.23)} fill={textColor}>
+        {active ? '💧' : '×'}
+      </text>
+    </svg>
+  );
+}
+
+function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus, waterStatus, showWaterStatus }) {
   const d = BD[b.type];
   if(!d) return null;
 
@@ -82,6 +126,12 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus }) 
       ? '0 0 0 2px rgba(255,61,90,0.75)'
       : undefined;
 
+  const waterBorder = showWaterStatus && waterStatus === 'connected'
+    ? '0 0 0 2px rgba(0,160,255,0.75)'
+    : showWaterStatus && waterStatus === 'disconnected'
+      ? '0 0 0 2px rgba(255,61,90,0.75)'
+      : undefined;
+
   return (
     <>
       {b.building && tpx > 26 && <div className="bld-timer">⏱ {ft(tl)}</div>}
@@ -90,17 +140,19 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus }) 
           className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
           style={{
             background:b.building?'rgba(255,180,0,0.1)':clr,
-            boxShadow: powerBorder,
+            boxShadow: waterBorder || powerBorder,
           }}
         >
           {b.lv > 1 && <div className="bld-lv">Lv{b.lv}</div>}
 
-          {(b.solar||b.co2f||showPowerStatus) && (
+          {(b.solar||b.co2f||showPowerStatus||showWaterStatus) && (
             <div className="bld-badge">
               {b.solar?'☀️':''}
               {b.co2f?'🌿':''}
               {showPowerStatus && powerStatus === 'connected' ? '⚡' : ''}
               {showPowerStatus && powerStatus === 'disconnected' ? '🔌' : ''}
+              {showWaterStatus && waterStatus === 'connected' ? '💧' : ''}
+              {showWaterStatus && waterStatus === 'disconnected' ? '🚱' : ''}
             </div>
           )}
 
@@ -110,6 +162,10 @@ function BldTile({ b, tpx, isSel, hasRoad, now, powerStatus, showPowerStatus }) 
 
           {showPowerStatus && powerStatus === 'disconnected' && sz > 34 && (
             <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>brak pr.</span>
+          )}
+
+          {showWaterStatus && waterStatus === 'disconnected' && sz > 34 && (
+            <span style={{fontSize:6,color:"#7dcfff",marginTop:1}}>brak w.</span>
           )}
 
           {b.building && (
@@ -137,15 +193,34 @@ function getPowerStatusForBuilding(building, activePowerLines) {
     : 'disconnected';
 }
 
+function getWaterStatusForBuilding(building, activeWaterPipes) {
+  const data = BD[building.type];
+  if (!data) return 'none';
+
+  const waterValue = (data.wt || 0) * building.lv;
+
+  if (waterValue < 0) return 'source';
+  if (waterValue === 0) return 'none';
+
+  return isInWaterPipeRange(building.x, building.y, activeWaterPipes)
+    ? 'connected'
+    : 'disconnected';
+}
+
 export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
   const tpx = TILE * cam.zoom;
   const sz = GS(G.thLv);
   const ter = TR[sz] || TR[24];
   const currentTime = Number.isFinite(now) ? now : Date.now() / 1000;
   const act = G.buildings.filter(b => !b.building);
+
   const powerLines = G.powerLines || new Set();
   const activePowerLines = getSourceConnectedPowerLines(powerLines, act);
   const showPowerLines = G.buildMode === 'powerline';
+
+  const waterPipes = G.waterPipes || new Set();
+  const activeWaterPipes = getSourceConnectedWaterPipes(waterPipes, act);
+  const showWaterPipes = G.buildMode === 'waterpipe';
 
   const tiles = [];
 
@@ -156,7 +231,9 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
       const isRd = G.roads.has(key);
       const bg = isRd ? '#1a1a1a' : (TC[t]||TC[0]);
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
+
       const inActivePowerRange = showPowerLines && isInPowerLineRange(gx, gy, activePowerLines);
+      const inActiveWaterRange = showWaterPipes && isInWaterPipeRange(gx, gy, activeWaterPipes);
 
       tiles.push(
         <div
@@ -210,6 +287,16 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
               inset:0,
               background:"rgba(255,180,0,0.13)",
               border:"1px solid rgba(255,180,0,0.28)",
+              pointerEvents:"none",
+            }}/>
+          )}
+
+          {inActiveWaterRange && (
+            <div style={{
+              position:"absolute",
+              inset:0,
+              background:"rgba(0,160,255,0.13)",
+              border:"1px solid rgba(0,160,255,0.28)",
               pointerEvents:"none",
             }}/>
           )}
@@ -269,6 +356,33 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
     });
   }
 
+  const waterPipeEls = [];
+  if(showWaterPipes) {
+    waterPipes.forEach(key => {
+      const [wx, wy] = key.split(',').map(Number);
+
+      if(
+        Number.isNaN(wx) ||
+        Number.isNaN(wy) ||
+        wx < 0 ||
+        wy < 0 ||
+        wx >= sz ||
+        wy >= sz
+      ) return;
+
+      waterPipeEls.push(
+        <WaterPipeTile
+          key={`wp${key}`}
+          gx={wx}
+          gy={wy}
+          tpx={tpx}
+          waterPipes={waterPipes}
+          activeWaterPipes={activeWaterPipes}
+        />
+      );
+    });
+  }
+
   const previews = [];
 
   if(G.buildMode) {
@@ -316,6 +430,26 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
               />
             );
           }
+        } else if(G.buildMode === 'waterpipe') {
+          const isValidStart = isNearWaterSource(gx, gy, G.buildings) || isNearWaterPipe(gx, gy, waterPipes);
+          const alreadyHasPipe = waterPipes.has(key);
+
+          if(!alreadyHasPipe) {
+            previews.push(
+              <div
+                key={`pvw${key}`}
+                className="pv-tile"
+                style={{
+                  left:gx*tpx,
+                  top:gy*tpx,
+                  width:tpx,
+                  height:tpx,
+                  background:isValidStart ? "rgba(0,160,255,0.12)" : "rgba(255,61,90,0.045)",
+                  border:isValidStart ? "1px dashed rgba(0,160,255,0.45)" : "1px dashed rgba(255,61,90,0.16)",
+                }}
+              />
+            );
+          }
         } else {
           if(!G.grid[key] && !G.roads.has(key)) {
             previews.push(
@@ -344,8 +478,12 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
 
     const hasR = d.nr || nR(b.x,b.y,G.roads) || nT(b.x,b.y,act);
     const isSel = G.selUID === b.uid;
+
     const powerStatus = getPowerStatusForBuilding(b, activePowerLines);
     const showPowerStatus = showPowerLines && ['connected','disconnected'].includes(powerStatus);
+
+    const waterStatus = getWaterStatusForBuilding(b, activeWaterPipes);
+    const showWaterStatus = showWaterPipes && ['connected','disconnected'].includes(waterStatus);
 
     return (
       <div
@@ -368,6 +506,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           now={currentTime}
           powerStatus={powerStatus}
           showPowerStatus={showPowerStatus}
+          waterStatus={waterStatus}
+          showWaterStatus={showWaterStatus}
         />
       </div>
     );
@@ -387,6 +527,7 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
       {tiles}
       {roadEls}
       {powerLineEls}
+      {waterPipeEls}
       {previews}
       {bldEls}
     </div>
