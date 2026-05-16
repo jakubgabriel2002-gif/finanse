@@ -14,22 +14,7 @@ import {
   getWaterSupplyConnectedPipes,
   getSewageConnectedPipes,
 } from '../game/resources/waterPipes.js';
-
-const SEWAGE_LOAD_MULTIPLIER = {
-  apartment: 0.9,
-  house: 0.9,
-  factory: 1.1,
-  shop: 0.7,
-  office: 0.7,
-  bank: 0.5,
-  hospital: 1.2,
-  school: 0.8,
-  police: 0.4,
-  fire: 0.4,
-  bus: 0.2,
-  tram: 0.2,
-  metro: 0.3,
-};
+import { SEWAGE_LOAD_MULTIPLIER } from '../game/resources/serviceConfig.js';
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
