@@ -23,6 +23,7 @@ import {
   WATERPIPE_COST,
   canBuildWaterPipe,
 } from './game/resources/waterPipes.js';
+import { rollCityServiceEvent } from './game/cityEvents.js';
 import {
   shouldShowTutorial,
   startTutorialAction,
@@ -258,6 +259,8 @@ export default function App() {
 
         let elTmr = prev.elTmr - 1;
         let auditCD = Math.max(0, prev.auditCD - 1);
+        let serviceEventCD = Math.max(0, (prev.serviceEventCD || 0) - 1);
+
         const newLog = [{id:logIdRef.current++,label:`📅 ${MS[prev.month-1]} Rok ${prev.year}`,amount:net}, ...prev.log.slice(0,19)];
 
         if(elTmr <= 0) {
@@ -293,6 +296,31 @@ export default function App() {
           newLog.unshift({id:logIdRef.current++,label:ev.t,amount:ev.b});
 
           setEvPopup(ev);
+          setTimeout(() => setEvPopup(null), 5000);
+        }
+
+        const serviceEvent = rollCityServiceEvent(
+          {
+            ...prev,
+            month,
+            year,
+            weather,
+            serviceEventCD,
+          },
+          s
+        );
+
+        if(serviceEvent) {
+          budget += serviceEvent.b;
+          serviceEventCD = serviceEvent.cooldown || 4;
+
+          events = [{id:logIdRef.current++,t:serviceEvent.t,tp:serviceEvent.tp,mo:month,yr:year}, ...events.slice(0,9)];
+          news = [{id:logIdRef.current++,t:serviceEvent.t,m:serviceEvent.m,tp:serviceEvent.tp}, ...news.slice(0,4)];
+          newLog.unshift({id:logIdRef.current++,label:serviceEvent.t,amount:serviceEvent.b});
+
+          notif(`${serviceEvent.t} ${fm(serviceEvent.b)} zł`, serviceEvent.tp === 'ok' ? 'ok' : 'err');
+
+          setEvPopup(serviceEvent);
           setTimeout(() => setEvPopup(null), 5000);
         }
 
@@ -333,6 +361,7 @@ export default function App() {
           year,
           elTmr,
           auditCD,
+          serviceEventCD,
           weather,
           events,
           news,
