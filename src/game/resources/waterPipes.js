@@ -1,18 +1,17 @@
-export const WATERPIPE_COST = 120;
-export const WATERPIPE_RANGE = 3;
+import {
+  WATERPIPE_RANGE,
+  WATER_SOURCE_TYPES,
+  WATER_SUPPLY_SOURCE_TYPES,
+  SEWAGE_SOURCE_TYPES,
+} from './serviceConfig.js';
 
-export const WATER_SUPPLY_SOURCE_TYPES = [
-  'waterplant',
-];
-
-export const SEWAGE_SOURCE_TYPES = [
-  'sewage',
-];
-
-export const WATER_SOURCE_TYPES = [
-  ...WATER_SUPPLY_SOURCE_TYPES,
-  ...SEWAGE_SOURCE_TYPES,
-];
+export {
+  WATERPIPE_COST,
+  WATERPIPE_RANGE,
+  WATER_SOURCE_TYPES,
+  WATER_SUPPLY_SOURCE_TYPES,
+  SEWAGE_SOURCE_TYPES,
+} from './serviceConfig.js';
 
 export function keyOf(x, y) {
   return `${x},${y}`;
@@ -153,7 +152,7 @@ export function getConnectedWaterPipesBySourceTypes(waterPipes, buildings, sourc
   return connected;
 }
 
-// Używane przez mapę/UX — pokazuje rury aktywne, jeśli są podłączone
+// Używane przez mapę/UX — rura jest aktywna, jeśli jest podłączona
 // do wodociągów albo oczyszczalni.
 export function getSourceConnectedWaterPipes(waterPipes, buildings) {
   return getConnectedWaterPipesBySourceTypes(waterPipes, buildings, WATER_SOURCE_TYPES);
