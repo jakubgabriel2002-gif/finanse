@@ -1,6 +1,12 @@
 import React from 'react';
 import { TILE, TC, TB, BD, BT, GS, TR } from '../data.js';
 import { nR, nT, ft } from '../gameLogic.js';
+import {
+  POWERLINE_RANGE,
+  isInPowerLineRange,
+  isNearPowerLine,
+  isNearPowerSource,
+} from '../game/resources/powerLines.js';
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
@@ -16,6 +22,35 @@ function RoadTile({ gx, gy, tpx, roads }) {
       {E && <rect x={c+rw/2-1} y={c-rw/2} width={tpx-c-rw/2+1} height={rw} fill="#282828"/>}
       {N&&S&&!W&&!E && <line x1={c} y1={0} x2={c} y2={tpx} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>}
       {W&&E&&!N&&!S && <line x1={0} y1={c} x2={tpx} y2={c} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>}
+    </svg>
+  );
+}
+
+function PowerLineTile({ gx, gy, tpx, powerLines }) {
+  const h = (dx,dy) => powerLines.has(`${gx+dx},${gy+dy}`);
+  const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
+  const c = tpx / 2;
+  const w = Math.max(3, tpx * 0.12);
+
+  return (
+    <svg
+      style={{
+        position:"absolute",
+        left:gx*tpx,
+        top:gy*tpx,
+        width:tpx,
+        height:tpx,
+        pointerEvents:"none",
+        zIndex:5,
+      }}
+      viewBox={`0 0 ${tpx} ${tpx}`}
+    >
+      <circle cx={c} cy={c} r={Math.max(4, tpx*0.16)} fill="rgba(255,180,0,0.9)" stroke="rgba(255,255,255,0.45)" strokeWidth="1"/>
+      {N && <rect x={c-w/2} y={0} width={w} height={c} fill="rgba(255,180,0,0.9)"/>}
+      {S && <rect x={c-w/2} y={c} width={w} height={c} fill="rgba(255,180,0,0.9)"/>}
+      {W && <rect x={0} y={c-w/2} width={c} height={w} fill="rgba(255,180,0,0.9)"/>}
+      {E && <rect x={c} y={c-w/2} width={c} height={w} fill="rgba(255,180,0,0.9)"/>}
+      <text x={c} y={c+3} textAnchor="middle" fontSize={Math.max(7, tpx*0.23)} fill="#1a1000">⚡</text>
     </svg>
   );
 }
@@ -59,6 +94,8 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
   const ter = TR[sz] || TR[24];
   const now = Date.now() / 1000;
   const act = G.buildings.filter(b => !b.building);
+  const powerLines = G.powerLines || new Set();
+  const showPowerLines = G.buildMode === 'powerline';
 
   const tiles = [];
 
@@ -69,6 +106,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
       const isRd = G.roads.has(key);
       const bg = isRd ? '#1a1a1a' : (TC[t]||TC[0]);
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
+      const inPowerRange = showPowerLines && isInPowerLineRange(gx, gy, powerLines);
 
       tiles.push(
         <div
@@ -115,6 +153,16 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
               pointerEvents:"none",
             }}/>
           )}
+
+          {inPowerRange && (
+            <div style={{
+              position:"absolute",
+              inset:0,
+              background:"rgba(255,180,0,0.14)",
+              border:"1px solid rgba(255,180,0,0.28)",
+              pointerEvents:"none",
+            }}/>
+          )}
         </div>
       );
     }
@@ -144,6 +192,32 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
     );
   });
 
+  const powerLineEls = [];
+  if(showPowerLines) {
+    powerLines.forEach(key => {
+      const [px, py] = key.split(',').map(Number);
+
+      if(
+        Number.isNaN(px) ||
+        Number.isNaN(py) ||
+        px < 0 ||
+        py < 0 ||
+        px >= sz ||
+        py >= sz
+      ) return;
+
+      powerLineEls.push(
+        <PowerLineTile
+          key={`pl${key}`}
+          gx={px}
+          gy={py}
+          tpx={tpx}
+          powerLines={powerLines}
+        />
+      );
+    });
+  }
+
   const previews = [];
 
   if(G.buildMode) {
@@ -167,6 +241,26 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
                   height:tpx,
                   background:"rgba(255,200,0,0.12)",
                   border:"1px dashed rgba(255,200,0,0.4)",
+                }}
+              />
+            );
+          }
+        } else if(G.buildMode === 'powerline') {
+          const isValidStart = isNearPowerSource(gx, gy, G.buildings) || isNearPowerLine(gx, gy, powerLines);
+          const alreadyHasLine = powerLines.has(key);
+
+          if(!alreadyHasLine) {
+            previews.push(
+              <div
+                key={`pvl${key}`}
+                className="pv-tile"
+                style={{
+                  left:gx*tpx,
+                  top:gy*tpx,
+                  width:tpx,
+                  height:tpx,
+                  background:isValidStart ? "rgba(255,180,0,0.12)" : "rgba(255,61,90,0.045)",
+                  border:isValidStart ? "1px dashed rgba(255,180,0,0.45)" : "1px dashed rgba(255,61,90,0.16)",
                 }}
               />
             );
@@ -231,6 +325,7 @@ export default function Map({ G, cam, onTileClick, onBldClick, mapRef }) {
     >
       {tiles}
       {roadEls}
+      {powerLineEls}
       {previews}
       {bldEls}
     </div>
