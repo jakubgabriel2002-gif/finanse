@@ -99,6 +99,7 @@ function getCenteredCamera(gameState, mapEl) {
 
 export default function App() {
   const [G, setG] = useState(() => loadGame() || createInitialGameState());
+  const [cam, setCam] = useState({x:0,y:0,zoom:1.0});
   const [nowTick, setNowTick] = useState(() => Date.now() / 1000);
   const [mapKey, setMapKey] = useState(0);
   const [mapResetNonce, setMapResetNonce] = useState(0);
@@ -114,13 +115,14 @@ export default function App() {
   const touchRef = useRef(null);
   const logIdRef = useRef(100);
   const notifIdRef = useRef(0);
-  useEffect(() => {
-  const id = setInterval(() => {
-    setNowTick(Date.now() / 1000);
-  }, 1000);
 
-  return () => clearInterval(id);
-}, []);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNowTick(Date.now() / 1000);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, []);
 
   const hardResetMapView = useCallback((gameState) => {
     resetAllScroll();
@@ -167,11 +169,11 @@ export default function App() {
     pendingMapStateRef.current = null;
 
     hardResetMapView(stateForReset);
-  }, [G.tab, mapResetNonce]);
+  }, [G.tab, mapResetNonce, hardResetMapView]);
 
   useEffect(() => {
     setG(g => {
-      const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines)
+      const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines);
       const inbox = genInbox({...g, stats});
       return {...g, stats, inbox};
     });
@@ -641,7 +643,7 @@ export default function App() {
     clearSavedGame();
 
     const fresh = createInitialGameState();
-    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather, fresh.powerLines)
+    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather, fresh.powerLines);
     const next = {...fresh,stats,inbox:genInbox({...fresh,stats})};
 
     setG(next);
@@ -818,7 +820,7 @@ export default function App() {
             onTouchEnd={onTouchEnd}
             onWheel={onWheel}
           >
-           <Map G={G} cam={cam} now={nowTick} onTileClick={tileClick} onBldClick={bldClick}/>
+            <Map G={G} cam={cam} now={nowTick} onTileClick={tileClick} onBldClick={bldClick}/>
 
             {G.buildMode && (
               <div id="build-banner" style={{background:G.buildMode==='road'?'rgba(180,120,0,0.97)':G.buildMode==='powerline'?'rgba(255,160,0,0.97)':'rgba(0,100,180,0.97)'}}>
