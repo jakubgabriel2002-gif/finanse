@@ -23,9 +23,9 @@ function buildTerrain(n) {
 export const TR = {24:buildTerrain(24),28:buildTerrain(28),32:buildTerrain(32)};
 
 export const LIM = {
-  1:{apartment:4,house:6,factory:2,shop:4,office:1,hospital:1,school:1,park:3,solar:2,windmill:2,powerplant:1,waterplant:1,police:1,fire:1,bus:2,metro:0,bank:0,townhall:1,sewage:1,tram:0},
-  2:{apartment:10,house:14,factory:5,shop:8,office:3,hospital:2,school:3,park:6,solar:5,windmill:4,powerplant:2,waterplant:2,police:2,fire:2,bus:4,metro:1,bank:1,townhall:1,sewage:2,tram:2},
-  3:{apartment:30,house:40,factory:15,shop:20,office:10,hospital:5,school:8,park:12,solar:12,windmill:8,powerplant:4,waterplant:4,police:5,fire:5,bus:8,metro:3,bank:3,townhall:1,sewage:4,tram:5},
+  1:{apartment:4,house:6,factory:2,shop:4,office:1,hospital:1,school:1,park:3,solar:2,windmill:2,powerplant:1,substation:3,waterplant:1,police:1,fire:1,bus:2,metro:0,bank:0,townhall:1,sewage:1,tram:0},
+  2:{apartment:10,house:14,factory:5,shop:8,office:3,hospital:2,school:3,park:6,solar:5,windmill:4,powerplant:2,substation:8,waterplant:2,police:2,fire:2,bus:4,metro:1,bank:1,townhall:1,sewage:2,tram:2},
+  3:{apartment:30,house:40,factory:15,shop:20,office:10,hospital:5,school:8,park:12,solar:12,windmill:8,powerplant:4,substation:18,waterplant:4,police:5,fire:5,bus:8,metro:3,bank:3,townhall:1,sewage:4,tram:5},
 };
 
 export const BD = {
@@ -41,6 +41,7 @@ export const BD = {
   solar:    {n:"Farma solarna", e:"☀️",c:"Energia",         cost:10000,inc:200, exp:40,  pop:0,  jobs:5,  co2:-30,pw:-30, wt:0,  hap:{env:20},                 ml:5,nr:false,cl:["#1a1a0a","#22220e","#2a2a12","#323216","#3a3a1a"]},
   windmill: {n:"Wiatrak",       e:"💨",c:"Energia",         cost:8000, inc:150, exp:30,  pop:0,  jobs:3,  co2:-20,pw:-18, wt:0,  hap:{env:15},                 ml:4,nr:false,cl:["#1a2a3a","#223040","#2a3848","#324050"]},
   powerplant:{n:"Elektrownia",  e:"⚡",c:"Energia",         cost:20000,inc:500, exp:600, pop:0,  jobs:25, co2:35, pw:-120,wt:20, hap:{env:-10},                ml:3,nr:false,cl:["#2a1a0a","#3a2414","#4a2e1e"]},
+  substation:{n:"Podstacja",    e:"🔌",c:"Energia",         cost:6000, inc:0,   exp:120, pop:0,  jobs:4,  co2:1,  pw:3,   wt:0,  hap:{services:8},             ml:4,nr:false,cl:["#102a3a","#143446","#183e52","#1c485e"]},
   waterplant:{n:"Wodociągi",    e:"💧",c:"Infrastruktura",  cost:15000,inc:0,   exp:400, pop:0,  jobs:15, co2:3,  pw:5,   wt:-80,hap:{services:15,housing:5}, ml:3,nr:false,cl:["#0a1a3a","#102040","#182848"]},
   sewage:   {n:"Oczyszczalnia", e:"🏗️",c:"Infrastruktura", cost:18000,inc:0,   exp:500, pop:0,  jobs:20, co2:-10,pw:8,   wt:-40,hap:{env:15,services:8,housing:5},ml:3,nr:false,cl:["#1a2a1a","#1e3020","#223826"]},
   police:   {n:"Policja",       e:"🚔",c:"Usługi",          cost:5000, inc:0,   exp:380, pop:0,  jobs:20, co2:4,  pw:3,   wt:2,  hap:{services:15,housing:8}, ml:4,nr:false,cl:["#0a0a2a","#121232","#1a1a3a","#222242"]},
@@ -122,7 +123,7 @@ export const TSTEPS = [
   },
   {
     title:"🎉 Gotowe!",
-    body:"Twoje miasto jest gotowe!\n\n✅ Drogi = pełny dochód z budynków\n✅ Ratusz = podatki, polityki, kontrole\n✅ Klikaj budynki = panele/filtry\n✅ Oczyszczalnia redukuje CO₂\n✅ Przystanek = opłaty za transport\n\nPowodzenia, burmistrzu!",
+    body:"Twoje miasto jest gotowe!\n\n✅ Drogi = pełny dochód z budynków\n✅ Ratusz = podatki, polityki, kontrole\n✅ Prąd = elektrownie + podstacje + zasięg sieci\n✅ Klikaj budynki = panele/filtry\n✅ Oczyszczalnia redukuje CO₂\n✅ Przystanek = opłaty za transport\n\nPowodzenia, burmistrzu!",
     btn:"Zaczynam grę! 🚀",
     action:"finish",
   },
