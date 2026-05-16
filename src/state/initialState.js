@@ -35,6 +35,7 @@ export const INIT_STATE = {
   riotOn: false,
   riotTmr: 0,
   serviceEventCD: 0,
+  smogScanUnlocked: false,
   inbox: [],
   events: [],
   news: [],
@@ -79,6 +80,7 @@ function restoreTutorialBuildMode(save, roads) {
       save.buildMode === 'road' ||
       save.buildMode === 'powerline' ||
       save.buildMode === 'waterpipe' ||
+      save.buildMode === 'smog' ||
       BD[save.buildMode]
     )
   ) {
@@ -128,6 +130,7 @@ export function normalizeLoadedGameState(save) {
     powerLines,
     waterPipes,
     serviceEventCD: Number.isFinite(save?.serviceEventCD) ? save.serviceEventCD : base.serviceEventCD,
+    smogScanUnlocked: !!save?.smogScanUnlocked,
     weather: save?.weather || WEATHERS[0],
     buildMode,
     buildings,
@@ -171,6 +174,7 @@ export function prepareGameForSave(gameState) {
     powerLines: [...(gameState.powerLines || new Set())],
     waterPipes: [...(gameState.waterPipes || new Set())],
     serviceEventCD: Number.isFinite(gameState.serviceEventCD) ? gameState.serviceEventCD : 0,
+    smogScanUnlocked: !!gameState.smogScanUnlocked,
     buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
