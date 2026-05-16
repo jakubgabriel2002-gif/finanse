@@ -143,6 +143,7 @@ export default function StatsTab({ G }) {
                 </div>
                 <div style={{fontSize:11,fontFamily:"monospace",color:"#ff9944"}}>
                   +{fa(emissions.topEmitter.value)} j.
+                  {emissions.topEmitter.filterLevel > 0 ? ` · filtr Lv${emissions.topEmitter.filterLevel}` : ''}
                 </div>
               </>
             ) : (
@@ -159,6 +160,7 @@ export default function StatsTab({ G }) {
                 </div>
                 <div style={{fontSize:11,fontFamily:"monospace",color:"#00e87a"}}>
                   -{fa(emissions.topReducer.value)} j.
+                  {emissions.topReducer.filterLevel > 0 ? ` · filtr Lv${emissions.topReducer.filterLevel}` : ''}
                 </div>
               </>
             ) : (
@@ -182,13 +184,45 @@ export default function StatsTab({ G }) {
                   fontSize:11,
                   padding:"4px 0",
                   borderBottom:"1px solid rgba(255,255,255,0.05)",
+                  gap:10,
                 }}
               >
-                <span style={{color:"#c8dff5"}}>
-                  {item.icon} {item.name} Lv{item.level}{item.hasFilter ? ' · filtr' : ''}
+                <span style={{color:"#c8dff5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {item.icon} {item.name} Lv{item.level}
+                  {item.filterLevel > 0 ? ` · filtr Lv${item.filterLevel}` : ''}
                 </span>
-                <span style={{fontFamily:"monospace",color:item.hasFilter?'#ffd700':'#ff9944'}}>
+                <span style={{fontFamily:"monospace",color:item.filterLevel>0?'#ffd700':'#ff9944',flexShrink:0}}>
                   +{fa(item.value)} j.
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {emissions.reducers?.length > 0 && (
+          <div style={{marginTop:10}}>
+            <div style={{fontSize:10,color:"#6a90b8",fontWeight:800,marginBottom:5}}>
+              NAJWIĘKSZE REDUKCJE
+            </div>
+
+            {emissions.reducers.slice(0,5).map(item => (
+              <div
+                key={`${item.uid}-${item.type}-${item.source}`}
+                style={{
+                  display:"flex",
+                  justifyContent:"space-between",
+                  fontSize:11,
+                  padding:"4px 0",
+                  borderBottom:"1px solid rgba(255,255,255,0.05)",
+                  gap:10,
+                }}
+              >
+                <span style={{color:"#c8dff5",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {item.icon} {item.name} Lv{item.level}
+                  {item.filterLevel > 0 ? ` · filtr Lv${item.filterLevel}` : ''}
+                </span>
+                <span style={{fontFamily:"monospace",color:"#00e87a",flexShrink:0}}>
+                  -{fa(item.value)} j.
                 </span>
               </div>
             ))}
