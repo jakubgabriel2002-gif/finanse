@@ -6,9 +6,10 @@ import {
   canInstallSolar,
   canInstallFilter,
   getFilterLevel,
-  getNextFilterLevel,
   getFilterReductionPercent,
-  getFilterUpgradeCost,
+  getNextEcoUpgrade,
+  hasGreenRoof,
+  getGreenRoofAbsorption,
 } from '../game/buildingUpgrades.js';
 import { getBuildingEmissionPreview } from '../game/environment/emissions.js';
 
@@ -25,17 +26,17 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
   const upgCost = Math.floor(d.cost*b.lv*1.5);
 
   const solarCheck = canInstallSolar(b);
-  const filterCheck = canInstallFilter(b);
+  const ecoCheck = canInstallFilter(b);
+  const nextEcoUpgrade = getNextEcoUpgrade(b);
   const emissionPreview = getBuildingEmissionPreview(b);
 
   const canSolar = solarCheck.ok;
-  const canFilter = filterCheck.ok;
+  const canEco = ecoCheck.ok;
 
   const filterLevel = getFilterLevel(b);
-  const nextFilterLevel = getNextFilterLevel(b);
-  const filterCost = getFilterUpgradeCost(b);
   const currentFilterReduction = getFilterReductionPercent(b);
-  const nextFilterReduction = getFilterReductionPercent(nextFilterLevel);
+  const roofOn = hasGreenRoof(b);
+  const roofAbsorption = getGreenRoofAbsorption(b);
 
   const co2Color = emissionPreview.finalEmission <= 0
     ? '#00e87a'
@@ -47,7 +48,7 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
     <div id="sel-panel">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
         <span style={{fontSize:24}}>
-          {d.e}{b.solar?'☀️':''}{filterLevel>0?'🌿':''}
+          {d.e}{b.solar?'☀️':''}{filterLevel>0?'🌿':''}{roofOn?'🌱':''}
         </span>
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:700}}>{d.n}</div>
@@ -105,7 +106,13 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
           {filterLevel > 0 && (
             <div style={{fontSize:10,color:"#00e87a",marginBottom:4}}>
               🌿 Filtr CO₂ Lv{filterLevel} — -{currentFilterReduction}% emisji
-              {emissionPreview.reduction > 0 ? ` · redukcja ${fa(emissionPreview.reduction)} j.` : ''}
+              {emissionPreview.filterReduction > 0 ? ` · redukcja ${fa(emissionPreview.filterReduction)} j.` : ''}
+            </div>
+          )}
+
+          {roofOn && (
+            <div style={{fontSize:10,color:"#00e87a",marginBottom:4}}>
+              🌱 Zielony dach — pochłania {fa(roofAbsorption)} j. CO₂
             </div>
           )}
         </>
@@ -140,16 +147,23 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
         </button>
       )}
 
-      {canFilter && !b.building && (
+      {canEco && !b.building && nextEcoUpgrade.kind === 'filter' && (
         <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();onFilter();}}
           style={{marginTop:5,width:"100%",padding:8,border:"1px solid rgba(0,232,122,0.4)",borderRadius:8,background:"rgba(0,232,122,0.06)",color:"#00e87a",fontSize:11}}>
           {filterLevel > 0
-            ? `🌿 Ulepsz filtr CO₂ do Lv${nextFilterLevel} (-${nextFilterReduction}%) · ${fa(filterCost)} zł`
-            : `🌿 Zainstaluj filtr CO₂ Lv1 (-${nextFilterReduction}%) · ${fa(filterCost)} zł`}
+            ? `🌿 Ulepsz filtr CO₂ do Lv${nextEcoUpgrade.nextLevel} (-${nextEcoUpgrade.reductionPercent}%) · ${fa(nextEcoUpgrade.cost)} zł`
+            : `🌿 Zainstaluj filtr CO₂ Lv1 (-${nextEcoUpgrade.reductionPercent}%) · ${fa(nextEcoUpgrade.cost)} zł`}
         </button>
       )}
 
-      {!canFilter && filterLevel > 0 && !b.building && (
+      {canEco && !b.building && nextEcoUpgrade.kind === 'greenRoof' && (
+        <button onPointerDown={(e)=>{e.stopPropagation();e.preventDefault();onFilter();}}
+          style={{marginTop:5,width:"100%",padding:8,border:"1px solid rgba(0,232,122,0.4)",borderRadius:8,background:"rgba(0,232,122,0.06)",color:"#00e87a",fontSize:11}}>
+          🌱 Zainstaluj zielony dach (-{fa(nextEcoUpgrade.absorption)} CO₂) · {fa(nextEcoUpgrade.cost)} zł
+        </button>
+      )}
+
+      {!canEco && (filterLevel > 0 || roofOn) && !b.building && (
         <div style={{
           marginTop:5,
           padding:8,
@@ -160,7 +174,7 @@ export default function SelPanel({ G, onClose, onUpgrade, onDemolish, onSolar, o
           fontSize:11,
           textAlign:"center",
         }}>
-          🌿 Filtr CO₂ Lv{filterLevel} — maksymalny poziom
+          🌿 Ekologiczne modernizacje zakończone
         </div>
       )}
     </div>
