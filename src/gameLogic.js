@@ -15,28 +15,41 @@ const POWER_DEPENDENT_TYPES = [
   'bank',
   'hospital',
   'school',
+  'waterplant',
+  'sewage',
+  'police',
+  'fire',
+  'bus',
+  'tram',
+  'metro',
 ];
 
 function getPowerMultiplier(power) {
-  if (!power || power.demand <= 0) return 1;
+  if (!power || power.totalDemand <= 0) return 1;
   if (power.ok) return 1;
 
-  // Brak prądu ma realnie boleć, ale nie zabija gry od razu.
-  // Budynki zależne od energii działają od 35% do 100%.
-  return Math.max(0.35, power.supply / power.demand);
+  return Math.max(0.25, (power.serviceEfficiency || 0) / 100);
 }
 
 function getPowerFeeMultiplier(power) {
-  if (!power || power.demand <= 0) return 1;
+  if (!power || power.totalDemand <= 0) return 1;
   if (power.ok) return 1;
 
-  // Opłata za prąd nie ma minimum.
-  // Jeśli miasto nie dostarcza prądu, nie może normalnie kasować mieszkańców.
-  return Math.max(0, Math.min(1, power.supply / power.demand));
+  return Math.max(0, Math.min(1, (power.serviceEfficiency || 0) / 100));
 }
 
 function isPowerDependent(type) {
   return POWER_DEPENDENT_TYPES.includes(type);
+}
+
+function getBuildingEnergyMultiplier(building, power, globalPowerMultiplier) {
+  if (!isPowerDependent(building.type)) return 1;
+
+  if (power?.disconnectedUIDs?.includes(building.uid)) {
+    return 0.2;
+  }
+
+  return globalPowerMultiplier;
 }
 
 export function buildStarterRoads(cx, cy) {
@@ -77,69 +90,49 @@ export function calcStats(blds, roads, loan, fees, weather) {
 
     exp += d.exp * b.lv;
 
-    // Populacja liczona tylko z gotowych budynków.
     pop += d.pop * b.lv * m;
-
-    // CO2: filtr redukuje emisję o 40%.
     co2 += d.co2 * b.lv * (b.co2f ? 0.6 : 1);
-
-    // Woda nadal zostaje w tym pliku.
-    // Prąd jest liczony osobno w calcPower().
     wt += d.wt * b.lv;
 
     if(d.jobs > 0) jobs += d.jobs * b.lv;
     Object.entries(d.hap).forEach(([k,v]) => { h[k] = (h[k]||0) + v; });
   });
 
-  // Pogoda wpływa na nastroje.
   if(weather?.id === 'rainy') h.env = (h.env||0) - 5;
   if(weather?.id === 'storm') { h.env = (h.env||0) - 10; h.housing = (h.housing||0) - 5; }
 
   const workers = Math.floor(pop * 0.6);
   const er = jobs > 0 ? Math.min(workers, jobs) / jobs : 1;
 
-  // Przychody:
-  // - budynki zależne od pracowników skalują się według zatrudnienia,
-  // - budynki zależne od prądu skalują się według dostępnej energii.
   act.forEach(b => {
     const d = BD[b.type]; if(!d) return;
     const ok = d.nr || nR(b.x,b.y,roads) || nT(b.x,b.y,act);
     const roadMultiplier = ok ? 1 : 0.05;
     const jobMultiplier = ['factory','office','shop','bank'].includes(b.type) ? er : 1;
-    const energyMultiplier = isPowerDependent(b.type) ? powerMultiplier : 1;
+    const energyMultiplier = getBuildingEnergyMultiplier(b, power, powerMultiplier);
 
     inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier;
   });
 
-  // Opłaty mieszkańców.
   const ri = Math.floor(pop * (fees?.rent  || 0) / 10);
   const wi = Math.floor(pop * (fees?.water || 0) / 10);
 
-  // Opłata za prąd:
-  // piBase = ile miasto mogłoby zarobić przy pełnym dostępie do energii.
-  // pi = realny dochód po uwzględnieniu dostępności prądu.
   const piBase = Math.floor(pop * (fees?.power || 0) / 10);
   const pi = Math.floor(piBase * powerFeeMultiplier);
 
-  // Opłata za transport — za każdy przystanek/tramwaj/metro, max x5.
   const transitCount = act.filter(b => ['bus','tram','metro'].includes(b.type)).length;
   const ti = Math.floor(pop * (fees?.transit || 0) / 10) * Math.min(transitCount, 5);
 
-  // Opłata za oczyszczalnię.
   const si = Math.floor(pop * (fees?.sewage || 0) / 10);
 
   inc += ri + wi + pi + ti + si;
 
-  // Zadowolenie spada, gdy opłaty są za wysokie.
   if((fees?.rent    || 0) > 5) h.housing  = (h.housing||0)  - Math.floor((fees.rent  - 5) / 2);
   if((fees?.water   || 0) > 5) h.services = (h.services||0) - Math.floor((fees.water - 5) / 3);
   if((fees?.power   || 0) > 5) h.services = (h.services||0) - Math.floor((fees.power - 5) / 3);
   if((fees?.transit || 0) > 5) h.services = (h.services||0) - Math.floor((fees.transit-5) / 4);
   if((fees?.sewage  || 0) > 5) h.services = (h.services||0) - Math.floor((fees.sewage - 5) / 4);
 
-  // Dodatkowa kara:
-  // jeśli miasto ma deficyt prądu, a mimo tego pobiera opłatę za prąd,
-  // mieszkańcy mocniej tracą zadowolenie.
   if(power.deficit > 0 && (fees?.power || 0) > 0) {
     const missingPowerFeePercent = 100 - power.feeEfficiency;
     const unfairPowerFeePenalty = Math.ceil(((fees.power || 0) * missingPowerFeePercent) / 25);
@@ -148,16 +141,20 @@ export function calcStats(blds, roads, loan, fees, weather) {
     h.housing = (h.housing||0) - Math.ceil(unfairPowerFeePenalty / 2);
   }
 
-  // Deficyty obniżają zadowolenie.
-  if(power.deficit > 0) {
-    h.housing = (h.housing||0) - Math.floor(power.deficit / 5);
-    h.services = (h.services||0) - Math.floor(power.deficit / 8);
-    h.jobs = (h.jobs||0) - Math.floor(power.deficit / 10);
+  if(power.gridDeficit > 0) {
+    h.housing = (h.housing||0) - Math.floor(power.gridDeficit / 5);
+    h.services = (h.services||0) - Math.floor(power.gridDeficit / 8);
+    h.jobs = (h.jobs||0) - Math.floor(power.gridDeficit / 10);
+  }
+
+  if(power.disconnectedCount > 0) {
+    h.services = (h.services||0) - power.disconnectedCount * 3;
+    h.housing = (h.housing||0) - Math.ceil(power.disconnectedCount / 2);
+    h.jobs = (h.jobs||0) - Math.ceil(power.disconnectedCount / 2);
   }
 
   if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 5);
 
-  // Rata pożyczki.
   exp += loan ? Math.floor(loan.amt * loan.rate / 12) : 0;
 
   return {
@@ -165,10 +162,8 @@ export function calcStats(blds, roads, loan, fees, weather) {
     co2: Math.floor(co2), net: Math.floor(inc - exp),
     jobs, workers, er: Math.round(er * 100),
 
-    // Nowy system prądu.
     power,
 
-    // Stare pola zostają, żeby obecny UI dalej działał bez zmian.
     pw: power.legacyPw,
     pwOk: power.ok,
 
@@ -176,9 +171,6 @@ export function calcStats(blds, roads, loan, fees, weather) {
     wtOk: wt <= 0,
 
     ri, wi, pi, ti, si,
-
-    // Dodatkowa informacja techniczna:
-    // ile opłata za prąd dałaby przy 100% dostaw energii.
     piBase,
 
     feeInc: ri + wi + pi + ti + si,
@@ -201,13 +193,24 @@ export function genInbox(G) {
   const firc = G.buildings.filter(b=>b.type==="fire"&&!b.building).length;
   const avgH = Math.round(Object.values(s.sat).reduce((a,b)=>a+b,0)/5);
 
+  if(s.power?.disconnectedCount > 0)
+    msgs.push({
+      id:"pwnet",
+      icon:"🔌",
+      from:"Operator sieci",
+      sub:"Budynki poza siecią prądu",
+      body:`Odcięte budynki: ${s.power.disconnectedCount}. Zbuduj podstację bliżej tych budynków albo postaw źródło energii w ich okolicy.`,
+      pri:"high",
+      read:false
+    });
+
   if(!s.pwOk && s.pw > 10)
     msgs.push({
       id:"pw",
       icon:"⚡",
       from:"Mieszkańcy",
       sub:"Brak prądu!",
-      body:`Deficyt energii: ${s.pw} j. Budynki zależne od prądu działają na ${s.power?.efficiency || 35}%. Zbuduj elektrownię, farmę solarną lub wiatrak!`,
+      body:`Problem energii: ${s.pw} j. Wydajność systemu: ${s.power?.efficiency || 35}%. Zbuduj elektrownię, farmę solarną, wiatrak albo podstację!`,
       pri:"high",
       read:false
     });
@@ -217,8 +220,8 @@ export function genInbox(G) {
       id:"pweff",
       icon:"🏭",
       from:"Przedsiębiorcy",
-      sub:"Produkcja spada przez brak energii",
-      body:`Firmy i usługi zależne od prądu pracują tylko na ${s.power.efficiency}%. Dochody fabryk, sklepów, biur, banków, szkół i szpitali są obniżone.`,
+      sub:"Produkcja spada przez energię",
+      body:`Firmy i usługi zależne od prądu pracują tylko na ${s.power.efficiency}%. Dochody są obniżone przez braki energii lub brak podłączenia do sieci.`,
       pri:"high",
       read:false
     });
@@ -228,8 +231,8 @@ export function genInbox(G) {
       id:"pwrfee",
       icon:"💸",
       from:"Mieszkańcy",
-      sub:"Płacimy za prąd, którego brakuje",
-      body:`Opłata za prąd działa tylko na ${s.power?.feeEfficiency || 0}%, bo miasto ma deficyt energii. Realny dochód z tej opłaty: ${fa(s.pi)} zł zamiast ${fa(s.piBase || 0)} zł/mie.`,
+      sub:"Płacimy za niestabilny prąd",
+      body:`Opłata za prąd działa tylko na ${s.power?.feeEfficiency || 0}%. Realny dochód: ${fa(s.pi)} zł zamiast ${fa(s.piBase || 0)} zł/mie.`,
       pri:"med",
       read:false
     });
