@@ -8,6 +8,7 @@ export const INIT_STATE = {
   grid: {},
   roads: new Set(),
   powerLines: new Set(),
+  waterPipes: new Set(),
   thLv: 1,
   month: 1,
   year: 1,
@@ -53,6 +54,7 @@ export function createInitialGameState(overrides = {}) {
     grid: {},
     roads: new Set(),
     powerLines: new Set(),
+    waterPipes: new Set(),
     log: [{ id: 0, label: '🏙️ NeoCity — nowa gra!', amount: 0 }],
     policies: { ...INIT_STATE.policies },
     fees: { ...INIT_STATE.fees },
@@ -70,7 +72,15 @@ function restoreTutorialBuildMode(save, roads) {
   const tutStep = Number.isFinite(save.tutStep) ? save.tutStep : 0;
   const step = TSTEPS[tutStep];
 
-  if (save.buildMode && (save.buildMode === 'road' || save.buildMode === 'powerline' || BD[save.buildMode])) {
+  if (
+    save.buildMode &&
+    (
+      save.buildMode === 'road' ||
+      save.buildMode === 'powerline' ||
+      save.buildMode === 'waterpipe' ||
+      BD[save.buildMode]
+    )
+  ) {
     return save.buildMode;
   }
 
@@ -105,6 +115,7 @@ export function normalizeLoadedGameState(save) {
   const base = createInitialGameState();
   const roads = new Set(Array.isArray(save?.roads) ? save.roads : []);
   const powerLines = new Set(Array.isArray(save?.powerLines) ? save.powerLines : []);
+  const waterPipes = new Set(Array.isArray(save?.waterPipes) ? save.waterPipes : []);
   const buildMode = restoreTutorialBuildMode(save, roads);
   const buildings = normalizeBuildings(save?.buildings);
   const grid = rebuildGridFromBuildings(buildings);
@@ -114,6 +125,7 @@ export function normalizeLoadedGameState(save) {
     ...save,
     roads,
     powerLines,
+    waterPipes,
     weather: save?.weather || WEATHERS[0],
     buildMode,
     buildings,
@@ -155,6 +167,7 @@ export function prepareGameForSave(gameState) {
     grid,
     roads: [...gameState.roads],
     powerLines: [...(gameState.powerLines || new Set())],
+    waterPipes: [...(gameState.waterPipes || new Set())],
     buildMode: gameState.tutDone ? null : gameState.buildMode,
   };
 }
