@@ -66,12 +66,12 @@ export function buildStarterRoads(cx, cy) {
   return r;
 }
 
-export function calcStats(blds, roads, loan, fees, weather) {
+export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set()) {
   let inc=0, exp=0, pop=0, co2=0, jobs=0, wt=0;
   const h = {housing:0, jobs:0, edu:0, env:0, services:0};
   const act = blds.filter(b => !b.building);
 
-  const rawPower = calcPower(act, weather);
+  const rawPower = calcPower(act, weather, powerLines);
   const powerMultiplier = getPowerMultiplier(rawPower);
   const powerFeeMultiplier = getPowerFeeMultiplier(rawPower);
 
@@ -153,6 +153,10 @@ export function calcStats(blds, roads, loan, fees, weather) {
     h.jobs = (h.jobs||0) - Math.ceil(power.disconnectedCount / 2);
   }
 
+  if(power.inactivePowerLineCount > 0) {
+    h.services = (h.services||0) - Math.ceil(power.inactivePowerLineCount / 4);
+  }
+
   if(wt > 0) h.housing = (h.housing||0) - Math.floor(wt / 5);
 
   exp += loan ? Math.floor(loan.amt * loan.rate / 12) : 0;
@@ -193,13 +197,24 @@ export function genInbox(G) {
   const firc = G.buildings.filter(b=>b.type==="fire"&&!b.building).length;
   const avgH = Math.round(Object.values(s.sat).reduce((a,b)=>a+b,0)/5);
 
+  if(s.power?.inactivePowerLineCount > 0)
+    msgs.push({
+      id:"pwinactive",
+      icon:"🔌",
+      from:"Operator sieci",
+      sub:"Nieaktywne linie energetyczne",
+      body:`Masz ${s.power.inactivePowerLineCount} kaf. linii, które nie są połączone ze źródłem energii. Połącz je z elektrownią, farmą solarną albo wiatrakiem.`,
+      pri:"med",
+      read:false
+    });
+
   if(s.power?.disconnectedCount > 0)
     msgs.push({
       id:"pwnet",
       icon:"🔌",
       from:"Operator sieci",
       sub:"Budynki poza siecią prądu",
-      body:`Odcięte budynki: ${s.power.disconnectedCount}. Zbuduj podstację bliżej tych budynków albo postaw źródło energii w ich okolicy.`,
+      body:`Odcięte budynki: ${s.power.disconnectedCount}. Przeciągnij linie energetyczne bliżej tych budynków. Zasięg linii: ${s.power.powerLineRange || 3} kratki.`,
       pri:"high",
       read:false
     });
@@ -210,7 +225,7 @@ export function genInbox(G) {
       icon:"⚡",
       from:"Mieszkańcy",
       sub:"Brak prądu!",
-      body:`Problem energii: ${s.pw} j. Wydajność systemu: ${s.power?.efficiency || 35}%. Zbuduj elektrownię, farmę solarną, wiatrak albo podstację!`,
+      body:`Problem energii: ${s.pw} j. Wydajność systemu: ${s.power?.efficiency || 35}%. Zbuduj źródła energii albo przeciągnij linie energetyczne.`,
       pri:"high",
       read:false
     });
