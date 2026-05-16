@@ -16,6 +16,10 @@ import {
   applyFilterUpgrade,
 } from './game/buildingUpgrades.js';
 import {
+  POWERLINE_COST,
+  canBuildPowerLine,
+} from './game/resources/powerLines.js';
+import {
   shouldShowTutorial,
   startTutorialAction,
   maybeAdvanceBuildingTutorial,
@@ -337,11 +341,48 @@ export default function App() {
 
       const key = `${gx},${gy}`;
       const ter = TR[sz]||TR[24];
+      const terrain = ter[gy]?.[gx] ?? 0;
+
+      if(prev.buildMode==='powerline') {
+        const powerLines = new Set(prev.powerLines || []);
+
+        const check = canBuildPowerLine({
+          x: gx,
+          y: gy,
+          terrain,
+          powerLines,
+          buildings: prev.buildings,
+        });
+
+        if(!check.ok) {
+          notif(check.reason, "warn");
+          return prev;
+        }
+
+        if(prev.budget < POWERLINE_COST) {
+          notif(`❌ Za mało środków! (${fa(POWERLINE_COST)} zł)`, "err");
+          return prev;
+        }
+
+        powerLines.add(key);
+
+        const newLog=[
+          {id:logIdRef.current++,label:"🔌 Linia energetyczna",amount:-POWERLINE_COST},
+          ...prev.log.slice(0,19),
+        ];
+
+        return recalc({
+          ...prev,
+          powerLines,
+          budget:prev.budget-POWERLINE_COST,
+          log:newLog,
+        });
+      }
 
       if(prev.buildMode==='road') {
         if(prev.roads.has(key)){notif("⚠️ Tu już jest droga!","warn");return prev;}
         if(prev.grid[key]){notif("⚠️ Blokuje budynek!","warn");return prev;}
-        if(ter[gy]?.[gx]===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
+        if(terrain===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
         if(prev.budget<ROAD_COST){notif("❌ Za mało środków!","err");return prev;}
 
         const nr=new Set(prev.roads);
@@ -360,7 +401,7 @@ export default function App() {
       if(prev.buildMode) {
         if(prev.roads.has(key)){notif("⚠️ Tu jest droga!","warn");return prev;}
         if(prev.grid[key]){notif("⚠️ Zajęte!","warn");return prev;}
-        if(ter[gy]?.[gx]===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
+        if(terrain===2){notif("⚠️ Nie na wodzie!","warn");return prev;}
 
         const d=BD[prev.buildMode];
         if(!d) return prev;
@@ -651,6 +692,7 @@ export default function App() {
         buildings:[],
         grid:{},
         roads:new Set(),
+        powerLines:new Set(),
         tutDone:true,
         tutStep:TSTEPS.length,
         buildMode:null,
@@ -772,8 +814,14 @@ export default function App() {
             <Map G={G} cam={cam} onTileClick={tileClick} onBldClick={bldClick}/>
 
             {G.buildMode && (
-              <div id="build-banner" style={{background:G.buildMode==='road'?'rgba(180,120,0,0.97)':'rgba(0,100,180,0.97)'}}>
-                <span>{G.buildMode==='road'?'🛣️ Kliknij kafelek (200zł)':`${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}</span>
+              <div id="build-banner" style={{background:G.buildMode==='road'?'rgba(180,120,0,0.97)':G.buildMode==='powerline'?'rgba(255,160,0,0.97)':'rgba(0,100,180,0.97)'}}>
+                <span>
+                  {G.buildMode==='road'
+                    ? '🛣️ Kliknij kafelek (200zł)'
+                    : G.buildMode==='powerline'
+                      ? `🔌 Ciągnij linię energetyczną (${POWERLINE_COST}zł)`
+                      : `${BD[G.buildMode]?.e} ${BD[G.buildMode]?.n}`}
+                </span>
                 <button
                   onPointerDown={(e)=>{
                     e.stopPropagation();
