@@ -72,6 +72,9 @@ export function useMapCamera({ G, setG }) {
   const mapViewRef = useRef(null);
   const pendingMapStateRef = useRef(null);
   const latestGameStateRef = useRef(G);
+  const previousTabRef = useRef(null);
+  const handledResetNonceRef = useRef(mapResetNonce);
+
   const pinchRef = useRef(null);
   const touchRef = useRef(null);
 
@@ -133,7 +136,18 @@ export function useMapCamera({ G, setG }) {
   }, [setG]);
 
   useEffect(() => {
-    if (G.tab !== 'map') return;
+    const previousTab = previousTabRef.current;
+    const currentTab = G.tab;
+
+    const enteredMap = previousTab !== 'map' && currentTab === 'map';
+    const explicitReset = handledResetNonceRef.current !== mapResetNonce;
+
+    previousTabRef.current = currentTab;
+
+    if (currentTab !== 'map') return;
+    if (!enteredMap && !explicitReset) return;
+
+    handledResetNonceRef.current = mapResetNonce;
 
     const stateForReset = pendingMapStateRef.current || latestGameStateRef.current;
     pendingMapStateRef.current = null;
