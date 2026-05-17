@@ -1,29 +1,36 @@
 import { BD } from '../data.js';
 
-export const SOLAR_UPGRADE_COST = 3000;
-export const FILTER_UPGRADE_COST = 2500;
-export const GREEN_ROOF_UPGRADE_COST = 2500;
+export const SOLAR_UPGRADE_COST = 4500;
+
+export const FILTER_UPGRADE_COST = 3500;
+export const GREEN_ROOF_UPGRADE_COST = 3000;
 
 export const MAX_FILTER_LEVEL = 3;
 
 export const FILTER_REDUCTION_BY_LEVEL = {
   0: 0,
-  1: 0.5,
-  2: 0.7,
-  3: 0.85,
+  1: 0.45,
+  2: 0.65,
+  3: 0.8,
+};
+
+export const FILTER_COST_BY_LEVEL = {
+  1: 3500,
+  2: 7000,
+  3: 12000,
 };
 
 export const GREEN_ROOF_ABSORPTION_BY_TYPE = {
-  apartment: 8,
-  house: 4,
-  shop: 5,
-  office: 8,
-  bank: 7,
-  hospital: 9,
-  school: 7,
-  police: 4,
-  fire: 4,
-  townhall: 8,
+  apartment: 6,
+  house: 3,
+  shop: 4,
+  office: 6,
+  bank: 5,
+  hospital: 7,
+  school: 6,
+  police: 3,
+  fire: 3,
+  townhall: 6,
 };
 
 const POWER_PRODUCER_TYPES = ['solar', 'windmill', 'powerplant'];
@@ -80,12 +87,12 @@ export function getFilterEmissionMultiplier(building) {
 
 export function getFilterUpgradeCost(building) {
   const nextLevel = getNextFilterLevel(building);
+  return FILTER_COST_BY_LEVEL[nextLevel] || FILTER_UPGRADE_COST;
+}
 
-  if (nextLevel <= 1) return FILTER_UPGRADE_COST;
-  if (nextLevel === 2) return FILTER_UPGRADE_COST;
-  if (nextLevel === 3) return FILTER_UPGRADE_COST;
-
-  return FILTER_UPGRADE_COST;
+export function getGreenRoofUpgradeCost(building) {
+  const level = Math.max(1, building?.lv || 1);
+  return GREEN_ROOF_UPGRADE_COST + (level - 1) * 900;
 }
 
 export function hasGreenRoof(building) {
@@ -208,7 +215,7 @@ export function getNextEcoUpgrade(building) {
       ok: true,
       kind: 'greenRoof',
       label: 'Zielony dach',
-      cost: GREEN_ROOF_UPGRADE_COST,
+      cost: getGreenRoofUpgradeCost(building),
       absorption: (GREEN_ROOF_ABSORPTION_BY_TYPE[building.type] || 0) * Math.max(1, building.lv || 1),
     };
   }
