@@ -132,8 +132,12 @@ export const TSTEPS = [
 ];
 
 export const POLICIES = [
-  {id:"green", icon:"🌿",name:"Bonus ekologiczny",   desc:"Dotacje dla zielonych inwestycji",      cost:500},
-  {id:"work",  icon:"💼",name:"Program zatrudnienia", desc:"Subsydia dla pracodawców",              cost:800},
-  {id:"night", icon:"🌙",name:"Życie nocne",          desc:"+20% dochodu ze sklepów",              cost:300},
-  {id:"trans", icon:"🚌",name:"Darmowy transport",    desc:"Bezpłatna komunikacja dla wszystkich", cost:600},
+  {id:"green", icon:"🌿",name:"Bonus ekologiczny",   desc:"Dotacje dla zielonych inwestycji · +środowisko", cost:500},
+  {id:"work",  icon:"💼",name:"Program zatrudnienia", desc:"Subsydia dla pracodawców · +dochód firm", cost:800},
+  {id:"night", icon:"🌙",name:"Życie nocne",          desc:"+20% dochodu ze sklepów · +usługi", cost:300},
+  {id:"trans", icon:"🚌",name:"Darmowy transport",    desc:"Bezpłatna komunikacja · +usługi", cost:600},
+
+  {id:"cleanAir", icon:"🌬️",name:"Program czystego powietrza", desc:"Mniej emisji w całym mieście · +środowisko", cost:900},
+  {id:"industryRules", icon:"🏭",name:"Normy przemysłowe", desc:"Fabryki i elektrownie mniej trują, ale zarabiają trochę mniej", cost:1200},
+  {id:"lowEmissionZone", icon:"🚗",name:"Strefa niskiej emisji", desc:"Mniej emisji transportu i centrum · lekki koszt dla biznesu", cost:1000},
 ];
