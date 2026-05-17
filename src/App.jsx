@@ -1,21 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BT, MS, BD, EVTS, WEATHERS, TSTEPS } from './data.js';
-import { calcStats, genInbox, fm, getPolicyMonthlyCost } from './gameLogic.js';
+import { BD } from './data.js';
+import { calcStats, genInbox } from './gameLogic.js';
 import {
   loadGame,
   saveGame,
 } from './state/initialState.js';
 import { POWERLINE_COST } from './game/resources/powerLines.js';
 import { WATERPIPE_COST } from './game/resources/waterPipes.js';
-import { rollCityServiceEvent } from './game/cityEvents.js';
-import {
-  shouldShowTutorial,
-  startTutorialAction,
-} from './game/tutorialProgress.js';
 
 import { useNotifications } from './hooks/useNotifications.js';
 import { useMapCamera, resetAllScroll } from './hooks/useMapCamera.js';
 import { useGameActions } from './hooks/useGameActions.js';
+import { useNowTick } from './hooks/useNowTick.js';
+import { useConstructionTimer } from './hooks/useConstructionTimer.js';
+import { useMonthTick } from './hooks/useMonthTick.js';
+import { useTutorialFlow } from './hooks/useTutorialFlow.js';
 
 import Map from './components/Map.jsx';
 import TopBar from './components/TopBar.jsx';
@@ -34,32 +33,35 @@ import AuditModal from './components/modals/AuditModal.jsx';
 
 export default function App() {
   const [G, setG] = useState(() => loadGame() || null);
-  const [nowTick, setNowTick] = useState(() => Date.now() / 1000);
   const [evPopup, setEvPopup] = useState(null);
   const [loanModal, setLoanModal] = useState(null);
   const [auditModal, setAuditModal] = useState(false);
   const [showTut, setShowTut] = useState(false);
 
   const logIdRef = useRef(100);
+  const nowTick = useNowTick();
 
   const { notifs, notif } = useNotifications();
 
-  const recalc = useCallback((g) => {
+  const recalc = useCallback((gameState) => {
     const stats = calcStats(
-      g.buildings,
-      g.roads,
-      g.loan,
-      g.fees,
-      g.weather,
-      g.powerLines,
-      g.waterPipes,
-      g.policies
+      gameState.buildings,
+      gameState.roads,
+      gameState.loan,
+      gameState.fees,
+      gameState.weather,
+      gameState.powerLines,
+      gameState.waterPipes,
+      gameState.policies
     );
 
-    const inbox = genInbox({ ...g, stats });
+    const inbox = genInbox({
+      ...gameState,
+      stats,
+    });
 
     return {
-      ...g,
+      ...gameState,
       stats,
       inbox,
     };
@@ -72,6 +74,18 @@ export default function App() {
       setG(recalc(createInitialGameState()));
     });
   }, [G, recalc]);
+
+  useEffect(() => {
+    if (!G) return;
+
+    saveGame(G);
+  }, [G]);
+
+  useEffect(() => {
+    if (!G) return;
+
+    resetAllScroll();
+  }, [G?.tab]);
 
   const {
     cam,
@@ -86,7 +100,10 @@ export default function App() {
     onWheel,
     zoom,
     resetCam,
-  } = useMapCamera({ G: G || {}, setG });
+  } = useMapCamera({
+    G: G || {},
+    setG,
+  });
 
   const {
     tileClick,
@@ -121,357 +138,34 @@ export default function App() {
     requestMapReset,
   });
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      setNowTick(Date.now() / 1000);
-    }, 1000);
-
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (!G) return;
-
-    setShowTut(shouldShowTutorial(G));
-  }, [G?.tutDone, G?.tutStep, G?.buildMode, G?.roads?.size]);
-
-  useEffect(() => {
-    if (!G) return;
-
-    saveGame(G);
-  }, [G]);
-
-  useEffect(() => {
-    if (!G) return;
-
-    resetAllScroll();
-  }, [G?.tab]);
-
-  useEffect(() => {
-    if (!G) return;
-
-    const id = setInterval(() => {
-      setG(prev => {
-        if (!prev) return prev;
-
-        const now = Date.now() / 1000;
-        let changed = false;
-        let newThLv = prev.thLv;
-
-        const buildings = prev.buildings.map(b => {
-          if (b.building && b.buildEnd <= now) {
-            changed = true;
-
-            if (b.type === 'townhall') {
-              newThLv = b.lv;
-            }
-
-            notif(`✅ ${BD[b.type]?.e} ${BD[b.type]?.n} Lv${b.lv} gotowy!`, 'ok');
-
-            return {
-              ...b,
-              building: false,
-              buildEnd: 0,
-            };
-          }
-
-          return b;
-        });
-
-        if (!changed) return prev;
-
-        return recalc({
-          ...prev,
-          buildings,
-          thLv: newThLv,
-        });
-      });
-    }, 1000);
-
-    return () => clearInterval(id);
-  }, [G, notif, recalc]);
-
-  useEffect(() => {
-    if (!G) return;
-    if (G.paused || G.speed === 0 || !G.tutDone) return;
-
-    const iv = 12000 / G.speed;
-
-    const id = setInterval(() => {
-      setG(prev => {
-        if (!prev?.stats) return prev;
-
-        const s = prev.stats;
-        const tax = 0.8 + prev.taxRate / 100;
-        const policyCost = getPolicyMonthlyCost(prev.policies);
-        const net = Math.floor(s.net * tax * (0.9 + Math.random() * 0.2)) - policyCost;
-
-        let budget = prev.budget + net;
-        let month = prev.month + 1;
-        let year = prev.year;
-
-        if (month > 12) {
-          month = 1;
-          year++;
-        }
-
-        let elTmr = prev.elTmr - 1;
-        let auditCD = Math.max(0, prev.auditCD - 1);
-        let serviceEventCD = Math.max(0, (prev.serviceEventCD || 0) - 1);
-
-        const newLog = [
-          {
-            id: logIdRef.current++,
-            label: `📅 ${MS[prev.month - 1]} Rok ${prev.year}`,
-            amount: net,
-          },
-          ...prev.log.slice(0, 19),
-        ];
-
-        if (policyCost > 0) {
-          newLog.unshift({
-            id: logIdRef.current++,
-            label: '📋 Koszty polityk miejskich',
-            amount: -policyCost,
-          });
-        }
-
-        if (elTmr <= 0) {
-          elTmr = 48;
-
-          const avg = Math.round(Object.values(s.sat).reduce((a, b) => a + b, 0) / 5);
-
-          if (avg >= 45) {
-            budget += 2000;
-            notif('🗳️ Wygrałeś wybory! +2000 zł', 'ok');
-          } else {
-            budget -= 5000;
-            notif('🗳️ Przegrałeś wybory! -5000 zł', 'err');
-          }
-        }
-
-        let weather = prev.weather;
-
-        if (month % 3 === 0) {
-          const r = Math.random();
-
-          weather = r < 0.5
-            ? WEATHERS[0]
-            : r < 0.75
-              ? WEATHERS[1]
-              : r < 0.9
-                ? WEATHERS[2]
-                : WEATHERS[3];
-
-          if (weather.id !== 'sunny') {
-            notif(`${weather.icon} Pogoda: ${weather.name}`, 'warn');
-          }
-        }
-
-        let events = prev.events;
-        let news = prev.news;
-
-        if (Math.random() < 0.1) {
-          const ev = EVTS[Math.floor(Math.random() * EVTS.length)];
-
-          budget += ev.b;
-
-          events = [
-            {
-              id: logIdRef.current++,
-              t: ev.t,
-              tp: ev.tp,
-              mo: month,
-              yr: year,
-            },
-            ...events.slice(0, 9),
-          ];
-
-          news = [
-            {
-              id: logIdRef.current++,
-              t: ev.t,
-              m: ev.m,
-              tp: ev.tp,
-            },
-            ...news.slice(0, 4),
-          ];
-
-          newLog.unshift({
-            id: logIdRef.current++,
-            label: ev.t,
-            amount: ev.b,
-          });
-
-          setEvPopup(ev);
-          setTimeout(() => setEvPopup(null), 5000);
-        }
-
-        const serviceEvent = rollCityServiceEvent(
-          {
-            ...prev,
-            month,
-            year,
-            weather,
-            serviceEventCD,
-          },
-          s
-        );
-
-        if (serviceEvent) {
-          budget += serviceEvent.b;
-          serviceEventCD = serviceEvent.cooldown || 4;
-
-          events = [
-            {
-              id: logIdRef.current++,
-              t: serviceEvent.t,
-              tp: serviceEvent.tp,
-              mo: month,
-              yr: year,
-            },
-            ...events.slice(0, 9),
-          ];
-
-          news = [
-            {
-              id: logIdRef.current++,
-              t: serviceEvent.t,
-              m: serviceEvent.m,
-              tp: serviceEvent.tp,
-            },
-            ...news.slice(0, 4),
-          ];
-
-          newLog.unshift({
-            id: logIdRef.current++,
-            label: serviceEvent.t,
-            amount: serviceEvent.b,
-          });
-
-          notif(
-            `${serviceEvent.t} ${fm(serviceEvent.b)} zł`,
-            serviceEvent.tp === 'ok' ? 'ok' : 'err'
-          );
-
-          setEvPopup(serviceEvent);
-          setTimeout(() => setEvPopup(null), 5000);
-        }
-
-        let riotOn = prev.riotOn;
-        let riotTmr = prev.riotTmr;
-
-        const avg2 = Math.round(Object.values(s.sat).reduce((a, b) => a + b, 0) / 5);
-        const hasPol = prev.buildings.some(b => b.type === 'police' && !b.building);
-
-        if (!riotOn && avg2 < 35 && !hasPol && Math.random() < 0.05) {
-          riotOn = true;
-          riotTmr = 3;
-          budget -= 2000;
-
-          notif('🚨 ZAMIESZKI! -2000 zł', 'err');
-
-          newLog.unshift({
-            id: logIdRef.current++,
-            label: '🚨 Zamieszki',
-            amount: -2000,
-          });
-        }
-
-        if (riotOn) {
-          riotTmr--;
-
-          if (riotTmr <= 0) {
-            riotOn = false;
-          }
-        }
-
-        let loan = prev.loan;
-
-        if (loan) {
-          loan = {
-            ...loan,
-            months: loan.months - 1,
-          };
-
-          if (loan.months <= 0) {
-            loan = null;
-            notif('✅ Pożyczka spłacona!', 'ok');
-          }
-        }
-
-        return recalc({
-          ...prev,
-          budget,
-          log: newLog,
-          month,
-          year,
-          elTmr,
-          auditCD,
-          serviceEventCD,
-          weather,
-          events,
-          news,
-          riotOn,
-          riotTmr,
-          loan,
-        });
-      });
-    }, iv);
-
-    return () => clearInterval(id);
-  }, [G?.paused, G?.speed, G?.tutDone, notif, recalc]);
-
-  const tutAction = useCallback((step) => {
-    if (step.action === 'finish') {
-      setG(g => startTutorialAction(g, step));
-      setShowTut(false);
-      notif('🏙️ Powodzenia, burmistrzu!', 'ok');
-      return;
-    }
-
-    setG(g => {
-      const next = startTutorialAction(g, step);
-
-      if (next.tab === 'map') {
-        requestMapReset(next);
-      }
-
-      return next;
-    });
-  }, [setG, notif, requestMapReset]);
-
-  const tutSkip = useCallback(() => {
-    setG(prev => {
-      const next = recalc({
-        ...prev,
-        budget: 80000,
-        buildings: [],
-        grid: {},
-        roads: new Set(),
-        powerLines: new Set(),
-        waterPipes: new Set(),
-        tutDone: true,
-        tutStep: TSTEPS.length,
-        buildMode: null,
-        nextUID: 200,
-        log: [
-          {
-            id: logIdRef.current++,
-            label: '🏙️ Pominięto samouczek',
-            amount: 0,
-          },
-        ],
-      });
-
-      requestMapReset(next);
-
-      return next;
-    });
-
-    setShowTut(false);
-    notif('🏙️ Pusta mapa, 80 000 zł. Powodzenia!', 'ok');
-  }, [setG, notif, recalc, requestMapReset]);
+  useConstructionTimer({
+    enabled: Boolean(G),
+    setG,
+    notif,
+    recalc,
+  });
+
+  useMonthTick({
+    G,
+    setG,
+    notif,
+    recalc,
+    logIdRef,
+    setEvPopup,
+  });
+
+  const {
+    tutAction,
+    tutSkip,
+  } = useTutorialFlow({
+    G,
+    setG,
+    setShowTut,
+    notif,
+    recalc,
+    requestMapReset,
+    logIdRef,
+  });
 
   if (!G) {
     return (
