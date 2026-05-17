@@ -9,11 +9,11 @@ import {
 } from './state/initialState.js';
 import {
   SOLAR_UPGRADE_COST,
-  FILTER_UPGRADE_COST,
   canInstallSolar,
   canInstallFilter,
   applySolarUpgrade,
   applyFilterUpgrade,
+  getNextEcoUpgrade,
 } from './game/buildingUpgrades.js';
 import {
   POWERLINE_COST,
@@ -671,14 +671,16 @@ export default function App() {
       if(!b) return prev;
 
       const check = canInstallFilter(b);
+      const nextEcoUpgrade = getNextEcoUpgrade(b);
+      const cost = nextEcoUpgrade.cost || 0;
 
-      if(!check.ok){
-        notif(check.reason,"warn");
+      if(!check.ok || !nextEcoUpgrade.ok){
+        notif(check.reason || nextEcoUpgrade.reason || "⚠️ Nie można wykonać modernizacji ekologicznej.","warn");
         return prev;
       }
 
-      if(prev.budget<FILTER_UPGRADE_COST){
-        notif(`❌ Za mało! (${fa(FILTER_UPGRADE_COST)} zł)`,"err");
+      if(prev.budget < cost){
+        notif(`❌ Za mało! (${fa(cost)} zł)`,"err");
         return prev;
       }
 
@@ -686,11 +688,11 @@ export default function App() {
       const upd=buildings.find(x=>x.uid===b.uid);
       const grid={...prev.grid,[`${b.x},${b.y}`]:upd};
 
-      notif(`🌿 Modernizacja ekologiczna wykonana!`,"ok");
+      notif(`🌿 ${nextEcoUpgrade.label} wykonano!`,"ok");
 
-      const newLog=[{id:logIdRef.current++,label:`🌿 Eko upgrade — ${BD[b.type].n}`,amount:-FILTER_UPGRADE_COST},...prev.log.slice(0,19)];
+      const newLog=[{id:logIdRef.current++,label:`🌿 ${nextEcoUpgrade.label} — ${BD[b.type].n}`,amount:-cost},...prev.log.slice(0,19)];
 
-      return recalc({...prev,buildings,grid,budget:prev.budget-FILTER_UPGRADE_COST,log:newLog});
+      return recalc({...prev,buildings,grid,budget:prev.budget-cost,log:newLog});
     });
   }, [notif, recalc]);
 
