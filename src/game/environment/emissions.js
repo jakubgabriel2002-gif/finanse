@@ -45,14 +45,50 @@ function getBuildingEmissionMultiplier(type) {
   return CO2_TYPE_MULTIPLIER[type] ?? 1;
 }
 
-function getBaseEmission(building) {
+function getPolicyEmissionMultiplier(type, policies = {}) {
+  let multiplier = 1;
+
+  if (policies.cleanAir) {
+    multiplier *= 0.94;
+  }
+
+  if (policies.industryRules && ['factory', 'powerplant', 'waterplant', 'sewage'].includes(type)) {
+    multiplier *= 0.78;
+  }
+
+  if (policies.lowEmissionZone && ['bus', 'tram', 'metro', 'police', 'fire', 'shop', 'office', 'bank'].includes(type)) {
+    multiplier *= 0.82;
+  }
+
+  return multiplier;
+}
+
+function getAbsorptionPolicyMultiplier(type, policies = {}) {
+  let multiplier = 1;
+
+  if (policies.green && ['park', 'solar', 'windmill', 'sewage'].includes(type)) {
+    multiplier *= 1.08;
+  }
+
+  if (policies.cleanAir && ['park', 'solar', 'windmill'].includes(type)) {
+    multiplier *= 1.08;
+  }
+
+  return multiplier;
+}
+
+function getBaseEmission(building, policies = {}) {
   const data = BD[building.type];
   if (!data) return 0;
 
   const base = (data.co2 || 0) * building.lv;
   const multiplier = getBuildingEmissionMultiplier(building.type);
 
-  return base * multiplier;
+  if (base < 0) {
+    return base * getAbsorptionPolicyMultiplier(building.type, policies);
+  }
+
+  return base * multiplier * getPolicyEmissionMultiplier(building.type, policies);
 }
 
 function getFilteredEmission(building, baseEmission) {
@@ -348,7 +384,7 @@ function calcGreenCoverage(activeBuildings) {
   };
 }
 
-export function getBuildingEmissionPreview(building) {
+export function getBuildingEmissionPreview(building, policies = {}) {
   const data = BD[building?.type];
   if (!building || !data) {
     return {
@@ -364,7 +400,7 @@ export function getBuildingEmissionPreview(building) {
     };
   }
 
-  const baseEmission = getBaseEmission(building);
+  const baseEmission = getBaseEmission(building, policies);
   const filteredEmission = getFilteredEmission(building, baseEmission);
   const filterReduction = Math.max(0, baseEmission - filteredEmission);
   const greenRoofAbsorption = getGreenRoofAbsorption(building);
@@ -384,7 +420,7 @@ export function getBuildingEmissionPreview(building) {
   };
 }
 
-export function calcEmissions(activeBuildings, extraEmission = 0) {
+export function calcEmissions(activeBuildings, extraEmission = 0, policies = {}) {
   let gross = 0;
   let filteredReduction = 0;
   let absorption = 0;
@@ -396,7 +432,7 @@ export function calcEmissions(activeBuildings, extraEmission = 0) {
     const data = BD[building.type];
     if (!data) return;
 
-    const preview = getBuildingEmissionPreview(building);
+    const preview = getBuildingEmissionPreview(building, policies);
     const baseEmission = preview.baseEmission;
     const filteredEmission = preview.filteredEmission;
     const filterReduction = preview.filterReduction;
