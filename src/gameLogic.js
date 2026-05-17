@@ -1,4 +1,4 @@
-import { BD } from './data.js';
+import { BD, POLICIES } from './data.js';
 import { calcPower } from './game/resources/power.js';
 import { calcWater } from './game/resources/water.js';
 import { calcSewage } from './game/resources/sewage.js';
@@ -9,7 +9,13 @@ export const nT = (x,y,bs) => bs.some(b=>(b.type==="bus"||b.type==="tram"||b.typ
 
 export const fa = n => Math.abs(Math.round(n)).toLocaleString('pl');
 export const fm = n => (n>=0?'+':'-')+fa(n);
-export function ft(s){if(s<=0)return'✓';if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/3600)}h`;return`${Math.floor(s/86400)}d`;}
+export function ft(s){if(s<=0)return'✓';if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;if(s<86400)return`${Math.floor(s/86400)}d`;return`${Math.floor(s/86400)}d`;}
+
+export function getPolicyMonthlyCost(policies = {}) {
+  return POLICIES.reduce((sum, policy) => {
+    return sum + (policies?.[policy.id] ? policy.cost : 0);
+  }, 0);
+}
 
 const POWER_DEPENDENT_TYPES = [
   'factory',
@@ -143,6 +149,65 @@ function getBuildingSewageMultiplier(building, sewage, globalSewageMultiplier) {
   return globalSewageMultiplier;
 }
 
+function getPolicyIncomeMultiplier(type, policies = {}) {
+  let multiplier = 1;
+
+  if (policies.night && type === 'shop') {
+    multiplier *= 1.2;
+  }
+
+  if (policies.work && ['factory','office','shop','bank'].includes(type)) {
+    multiplier *= 1.05;
+  }
+
+  if (policies.industryRules && ['factory','powerplant'].includes(type)) {
+    multiplier *= 0.92;
+  }
+
+  if (policies.lowEmissionZone && ['shop','office','bank'].includes(type)) {
+    multiplier *= 0.97;
+  }
+
+  return multiplier;
+}
+
+function applyPolicyHappiness(h, policies = {}) {
+  if (policies.green) {
+    h.env = (h.env || 0) + 4;
+  }
+
+  if (policies.work) {
+    h.jobs = (h.jobs || 0) + 8;
+  }
+
+  if (policies.night) {
+    h.services = (h.services || 0) + 3;
+  }
+
+  if (policies.trans) {
+    h.services = (h.services || 0) + 4;
+    h.jobs = (h.jobs || 0) + 2;
+  }
+
+  if (policies.cleanAir) {
+    h.env = (h.env || 0) + 5;
+    h.services = (h.services || 0) + 2;
+    h.housing = (h.housing || 0) + 2;
+  }
+
+  if (policies.industryRules) {
+    h.env = (h.env || 0) + 6;
+    h.services = (h.services || 0) + 1;
+    h.jobs = (h.jobs || 0) - 1;
+  }
+
+  if (policies.lowEmissionZone) {
+    h.env = (h.env || 0) + 3;
+    h.housing = (h.housing || 0) + 4;
+    h.services = (h.services || 0) + 2;
+  }
+}
+
 export function buildStarterRoads(cx, cy) {
   const r = new Set();
   const a = (x,y) => r.add(`${x},${y}`);
@@ -157,10 +222,11 @@ export function buildStarterRoads(cx, cy) {
   return r;
 }
 
-export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set(), waterPipes = new Set()) {
+export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set(), waterPipes = new Set(), policies = {}) {
   let inc=0, exp=0, pop=0, jobs=0;
   const h = {housing:0, jobs:0, edu:0, env:0, services:0};
   const act = blds.filter(b => !b.building);
+  const policyCost = getPolicyMonthlyCost(policies);
 
   const rawPower = calcPower(act, weather, powerLines);
   const powerMultiplier = getPowerMultiplier(rawPower);
@@ -208,7 +274,7 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     infrastructureCo2Penalty += sewage.disconnectedCount * 2;
   }
 
-  const emissions = calcEmissions(act, infrastructureCo2Penalty);
+  const emissions = calcEmissions(act, infrastructureCo2Penalty, policies);
   const co2 = emissions.net;
 
   act.forEach(b => {
@@ -231,6 +297,8 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
   h.housing = (h.housing || 0) + emissions.penalty.housing;
   h.services = (h.services || 0) + emissions.penalty.services;
 
+  applyPolicyHappiness(h, policies);
+
   if(weather?.id === 'rainy') h.env = (h.env||0) - 5;
   if(weather?.id === 'storm') { h.env = (h.env||0) - 10; h.housing = (h.housing||0) - 5; }
 
@@ -245,8 +313,9 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     const energyMultiplier = getBuildingEnergyMultiplier(b, power, powerMultiplier);
     const buildingWaterMultiplier = getBuildingWaterMultiplier(b, water, waterMultiplier);
     const buildingSewageMultiplier = getBuildingSewageMultiplier(b, sewage, sewageMultiplier);
+    const policyIncomeMultiplier = getPolicyIncomeMultiplier(b.type, policies);
 
-    inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier * buildingWaterMultiplier * buildingSewageMultiplier;
+    inc += d.inc * b.lv * roadMultiplier * jobMultiplier * energyMultiplier * buildingWaterMultiplier * buildingSewageMultiplier * policyIncomeMultiplier;
   });
 
   const ri = Math.floor(pop * (fees?.rent  || 0) / 10);
@@ -346,6 +415,8 @@ export function calcStats(blds, roads, loan, fees, weather, powerLines = new Set
     inc: Math.floor(inc), exp: Math.floor(exp), pop: Math.floor(pop),
     co2: Math.floor(co2), net: Math.floor(inc - exp),
     jobs, workers, er: Math.round(er * 100),
+
+    policyCost,
 
     power,
     water,
@@ -526,6 +597,28 @@ export function genInbox(G) {
       sub:"Powietrze się pogarsza",
       body:`Jakość powietrza: ${s.emissions.airQuality}%. Emisja netto: ${s.emissions.net} j. Zainstaluj filtry CO₂ albo zbuduj więcej zieleni.`,
       pri:"med",
+      read:false
+    });
+
+  if(G.policies?.cleanAir && s.emissions?.airQuality >= 70)
+    msgs.push({
+      id:"cleanairpolicy",
+      icon:"🌬️",
+      from:"Wydział środowiska",
+      sub:"Program czystego powietrza działa",
+      body:`Program czystego powietrza pomaga utrzymać jakość powietrza na poziomie ${s.emissions.airQuality}%.`,
+      pri:"low",
+      read:false
+    });
+
+  if(G.policies?.industryRules)
+    msgs.push({
+      id:"industryrules",
+      icon:"🏭",
+      from:"Inspektorat przemysłu",
+      sub:"Normy przemysłowe aktywne",
+      body:"Fabryki i elektrownie emitują mniej CO₂, ale ich dochód jest lekko obniżony przez koszty dostosowania.",
+      pri:"low",
       read:false
     });
 
