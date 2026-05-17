@@ -22,6 +22,9 @@ export const INIT_STATE = {
     work: false,
     night: false,
     trans: false,
+    cleanAir: false,
+    industryRules: false,
+    lowEmissionZone: false,
   },
   fees: {
     rent: 0,
