@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { TILE, ROAD_COST, BT, BL, MS, GS, BD, LIM, TR, EVTS, WEATHERS, TSTEPS } from './data.js';
-import { calcStats, genInbox, fa, fm } from './gameLogic.js';
+import { calcStats, genInbox, fa, fm, getPolicyMonthlyCost } from './gameLogic.js';
 import {
   createInitialGameState,
   loadGame,
@@ -179,7 +179,17 @@ export default function App() {
 
   useEffect(() => {
     setG(g => {
-      const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines, g.waterPipes);
+      const stats = calcStats(
+        g.buildings,
+        g.roads,
+        g.loan,
+        g.fees,
+        g.weather,
+        g.powerLines,
+        g.waterPipes,
+        g.policies
+      );
+
       const inbox = genInbox({...g, stats});
       return {...g, stats, inbox};
     });
@@ -204,7 +214,17 @@ export default function App() {
   }, []);
 
   const recalc = useCallback((g) => {
-    const stats = calcStats(g.buildings, g.roads, g.loan, g.fees, g.weather, g.powerLines, g.waterPipes);
+    const stats = calcStats(
+      g.buildings,
+      g.roads,
+      g.loan,
+      g.fees,
+      g.weather,
+      g.powerLines,
+      g.waterPipes,
+      g.policies
+    );
+
     const inbox = genInbox({...g, stats});
     return {...g, stats, inbox};
   }, []);
@@ -246,8 +266,8 @@ export default function App() {
 
         const s = prev.stats;
         const tax = 0.8 + prev.taxRate/100;
-        const pc = (prev.policies.green?500:0)+(prev.policies.work?800:0)+(prev.policies.night?300:0)+(prev.policies.trans?600:0);
-        const net = Math.floor(s.net * tax * (0.9+Math.random()*0.2)) - pc;
+        const policyCost = getPolicyMonthlyCost(prev.policies);
+        const net = Math.floor(s.net * tax * (0.9+Math.random()*0.2)) - policyCost;
 
         let budget = prev.budget + net;
         let month = prev.month + 1;
@@ -263,6 +283,14 @@ export default function App() {
         let serviceEventCD = Math.max(0, (prev.serviceEventCD || 0) - 1);
 
         const newLog = [{id:logIdRef.current++,label:`📅 ${MS[prev.month-1]} Rok ${prev.year}`,amount:net}, ...prev.log.slice(0,19)];
+
+        if(policyCost > 0) {
+          newLog.unshift({
+            id: logIdRef.current++,
+            label: "📋 Koszty polityk miejskich",
+            amount: -policyCost,
+          });
+        }
 
         if(elTmr <= 0) {
           elTmr = 48;
@@ -519,6 +547,8 @@ export default function App() {
           buildEnd:now+BT[0],
           solar:false,
           co2f:false,
+          co2fLv:0,
+          greenRoof:false,
         };
 
         const buildings=[...prev.buildings,nb];
@@ -750,7 +780,17 @@ export default function App() {
     clearSavedGame();
 
     const fresh = createInitialGameState();
-    const stats = calcStats(fresh.buildings, fresh.roads, fresh.loan, fresh.fees, fresh.weather, fresh.powerLines, fresh.waterPipes);
+    const stats = calcStats(
+      fresh.buildings,
+      fresh.roads,
+      fresh.loan,
+      fresh.fees,
+      fresh.weather,
+      fresh.powerLines,
+      fresh.waterPipes,
+      fresh.policies
+    );
+
     const next = {...fresh,stats,inbox:genInbox({...fresh,stats})};
 
     setG(next);
