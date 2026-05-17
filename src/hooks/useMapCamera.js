@@ -71,8 +71,13 @@ export function useMapCamera({ G, setG }) {
 
   const mapViewRef = useRef(null);
   const pendingMapStateRef = useRef(null);
+  const latestGameStateRef = useRef(G);
   const pinchRef = useRef(null);
   const touchRef = useRef(null);
+
+  useEffect(() => {
+    latestGameStateRef.current = G;
+  }, [G]);
 
   const hardResetMapView = useCallback((gameState) => {
     resetAllScroll();
@@ -80,6 +85,7 @@ export function useMapCamera({ G, setG }) {
 
     const applyCamera = () => {
       resetAllScroll();
+
       const mapEl = mapViewRef.current || document.getElementById('map-view');
       setCam(getCenteredCamera(gameState, mapEl));
     };
@@ -129,11 +135,11 @@ export function useMapCamera({ G, setG }) {
   useEffect(() => {
     if (G.tab !== 'map') return;
 
-    const stateForReset = pendingMapStateRef.current || G;
+    const stateForReset = pendingMapStateRef.current || latestGameStateRef.current;
     pendingMapStateRef.current = null;
 
     hardResetMapView(stateForReset);
-  }, [G, G.tab, mapResetNonce, hardResetMapView]);
+  }, [G.tab, mapResetNonce, hardResetMapView]);
 
   const onTouchStart = useCallback((e) => {
     if (e.touches.length === 2) {
@@ -186,7 +192,9 @@ export function useMapCamera({ G, setG }) {
     const dx = e.touches[0].clientX - t.sx;
     const dy = e.touches[0].clientY - t.sy;
 
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) t.moved = true;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      t.moved = true;
+    }
 
     setCam(c => ({
       ...c,
@@ -217,8 +225,8 @@ export function useMapCamera({ G, setG }) {
   }, []);
 
   const resetCam = useCallback(() => {
-    hardResetMapView(G);
-  }, [G, hardResetMapView]);
+    hardResetMapView(latestGameStateRef.current);
+  }, [hardResetMapView]);
 
   return {
     cam,
