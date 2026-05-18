@@ -1,136 +1,147 @@
 const ASSET_EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg'];
 
+const BASE_URL = import.meta.env.BASE_URL || '/';
+
+function assetPath(path) {
+  const cleanBase = BASE_URL.endsWith('/') ? BASE_URL : `${BASE_URL}/`;
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+
+  return `${cleanBase}${cleanPath}`;
+}
+
 function sources(basePath) {
-  return ASSET_EXTENSIONS.map(ext => `${basePath}.${ext}`);
+  return ASSET_EXTENSIONS.map(ext => assetPath(`${basePath}.${ext}`));
 }
 
 /*
   TEREN
 
-  Na ten moment masz tylko grass.png, więc tylko trawa ma grafikę.
-  Reszta terenu zostaje na starych kolorach/fallbackach z Map.jsx:
-  - woda dalej będzie renderowana starym gradientem
-  - las dalej może mieć emoji 🌲
-  - piach/ciemna trawa zostają kolorami z data.js
+  Na ten moment masz tylko grass.png.
+  Reszta terenu zostaje na starych kolorach/fallbackach z Map.jsx.
 */
 export const TERRAIN_ASSETS = {
-  0: '/assets/tiles/grass.png',
+  0: assetPath('assets/tiles/grass.png'),
 };
 
 /*
   BUDYNKI
 
-  Tu możesz wrzucać pliki jako:
-  public/assets/buildings/house.png
-  public/assets/buildings/house.webp
-  public/assets/buildings/house.jpg
-  public/assets/buildings/house.jpeg
+  Pliki wrzucasz do:
+  public/assets/buildings/
 
-  Kod sam sprawdzi formaty po kolei.
+  Przykłady:
+  public/assets/buildings/house.png
+  public/assets/buildings/apartment.png
+  public/assets/buildings/factory.png
+
+  Ważne:
+  - małe litery
+  - dokładnie takie nazwy jak niżej
+  - najlepiej .png albo .webp
 */
 export const BUILDING_ASSETS = {
   townhall: {
-    base: '/assets/buildings/townhall',
+    base: 'assets/buildings/townhall',
     scale: 1.55,
     yOffset: -0.26,
   },
   house: {
-    base: '/assets/buildings/house',
+    base: 'assets/buildings/house',
     scale: 1.28,
     yOffset: -0.14,
   },
   apartment: {
-    base: '/assets/buildings/apartment',
+    base: 'assets/buildings/apartment',
     scale: 1.58,
     yOffset: -0.28,
   },
   factory: {
-    base: '/assets/buildings/factory',
+    base: 'assets/buildings/factory',
     scale: 1.55,
     yOffset: -0.24,
   },
   shop: {
-    base: '/assets/buildings/shop',
+    base: 'assets/buildings/shop',
     scale: 1.33,
     yOffset: -0.16,
   },
   office: {
-    base: '/assets/buildings/office',
+    base: 'assets/buildings/office',
     scale: 1.58,
     yOffset: -0.28,
   },
   bank: {
-    base: '/assets/buildings/bank',
+    base: 'assets/buildings/bank',
     scale: 1.48,
     yOffset: -0.22,
   },
   hospital: {
-    base: '/assets/buildings/hospital',
+    base: 'assets/buildings/hospital',
     scale: 1.58,
     yOffset: -0.26,
   },
   school: {
-    base: '/assets/buildings/school',
+    base: 'assets/buildings/school',
     scale: 1.52,
     yOffset: -0.24,
   },
   police: {
-    base: '/assets/buildings/police',
+    base: 'assets/buildings/police',
     scale: 1.35,
     yOffset: -0.16,
   },
   fire: {
-    base: '/assets/buildings/fire',
+    base: 'assets/buildings/fire',
     scale: 1.38,
     yOffset: -0.16,
   },
   waterplant: {
-    base: '/assets/buildings/waterplant',
+    base: 'assets/buildings/waterplant',
     scale: 1.62,
     yOffset: -0.28,
   },
   sewage: {
-    base: '/assets/buildings/sewage',
+    base: 'assets/buildings/sewage',
     scale: 1.68,
     yOffset: -0.3,
   },
 
   /*
-    Te zostają przygotowane na później.
-    Jeśli nie masz jeszcze grafik, gra użyje fallbacku emoji.
+    Przygotowane na później.
+    Jeśli nie masz tych grafik, gra użyje fallbacku.
   */
   park: {
-    base: '/assets/buildings/park',
+    base: 'assets/buildings/park',
     scale: 1.2,
     yOffset: -0.08,
   },
   solar: {
-    base: '/assets/buildings/solar',
+    base: 'assets/buildings/solar',
     scale: 1.3,
     yOffset: -0.12,
   },
   windmill: {
-    base: '/assets/buildings/windmill',
+    base: 'assets/buildings/windmill',
     scale: 1.45,
     yOffset: -0.2,
   },
   powerplant: {
-    base: '/assets/buildings/powerplant',
+    base: 'assets/buildings/powerplant',
     scale: 1.62,
     yOffset: -0.28,
   },
   bus: {
-    base: '/assets/buildings/bus',
+    base: 'assets/buildings/bus',
     scale: 1.18,
     yOffset: -0.06,
   },
   tram: {
-    base: '/assets/buildings/tram',
+    base: 'assets/buildings/tram',
     scale: 1.22,
     yOffset: -0.08,
   },
   metro: {
-    base: '/assets/buildings/metro',
+    base: 'assets/buildings/metro',
     scale: 1.28,
     yOffset: -0.1,
   },
@@ -139,33 +150,36 @@ export const BUILDING_ASSETS = {
 /*
   DROGI
 
-  Masz aktualnie:
-  - road-straight
-  - road-curve
-  - road-intersection
-  - road-t
-  - road-culdesac
+  Pliki wrzucasz do:
+  public/assets/roads/
 
-  Nie masz klasycznego road-deadend, więc deadend używa road-culdesac.
+  Masz:
+  public/assets/roads/road-straight.png
+  public/assets/roads/road-curve.png
+  public/assets/roads/road-intersection.png
+  public/assets/roads/road-t.png
+  public/assets/roads/road-culdesac.png
+
+  Nie masz road-deadend, więc deadend używa road-culdesac.
 */
 export const ROAD_ASSETS = {
   straight: {
-    base: '/assets/roads/road-straight',
+    base: 'assets/roads/road-straight',
   },
   curve: {
-    base: '/assets/roads/road-curve',
+    base: 'assets/roads/road-curve',
   },
   intersection: {
-    base: '/assets/roads/road-intersection',
+    base: 'assets/roads/road-intersection',
   },
   t: {
-    base: '/assets/roads/road-t',
+    base: 'assets/roads/road-t',
   },
   deadend: {
-    base: '/assets/roads/road-culdesac',
+    base: 'assets/roads/road-culdesac',
   },
   culdesac: {
-    base: '/assets/roads/road-culdesac',
+    base: 'assets/roads/road-culdesac',
   },
 };
 
