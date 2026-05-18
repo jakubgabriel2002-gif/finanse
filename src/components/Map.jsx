@@ -16,22 +16,114 @@ import {
 } from '../game/resources/waterPipes.js';
 import { SEWAGE_LOAD_MULTIPLIER } from '../game/resources/serviceConfig.js';
 import { getBuildingEmissionPreview } from '../game/environment/emissions.js';
+import {
+  getTerrainAssetPath,
+  getBuildingAssetConfig,
+  getRoadAssetSources,
+  getRoadVisualType,
+} from '../game/assets/assetRegistry.js';
+
+function AssetImage({
+  sources = [],
+  alt = '',
+  className = '',
+  style = {},
+  fallback = null,
+}) {
+  const [index, setIndex] = React.useState(0);
+
+  if (!sources.length || index >= sources.length) {
+    return fallback;
+  }
+
+  return (
+    <img
+      src={sources[index]}
+      alt={alt}
+      className={className}
+      draggable={false}
+      style={{
+        display: 'block',
+        pointerEvents: 'none',
+        userSelect: 'none',
+        ...style,
+      }}
+      onError={() => setIndex(current => current + 1)}
+    />
+  );
+}
+
+function FallbackRoadSvg({ tpx, north, south, west, east }) {
+  const c = tpx / 2;
+  const rw = Math.max(4, tpx * 0.25);
+
+  return (
+    <svg
+      className="road-svg"
+      style={{ left: 0, top: 0, width: tpx, height: tpx }}
+      viewBox={`0 0 ${tpx} ${tpx}`}
+    >
+      <rect x={c-rw/2} y={c-rw/2} width={rw} height={rw} fill="#282828"/>
+      {north && <rect x={c-rw/2} y={0} width={rw} height={c-rw/2+1} fill="#282828"/>}
+      {south && <rect x={c-rw/2} y={c+rw/2-1} width={rw} height={tpx-c-rw/2+1} fill="#282828"/>}
+      {west && <rect x={0} y={c-rw/2} width={c-rw/2+1} height={rw} fill="#282828"/>}
+      {east && <rect x={c+rw/2-1} y={c-rw/2} width={tpx-c-rw/2+1} height={rw} fill="#282828"/>}
+
+      {north && south && !west && !east && (
+        <line x1={c} y1={0} x2={c} y2={tpx} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>
+      )}
+
+      {west && east && !north && !south && (
+        <line x1={0} y1={c} x2={tpx} y2={c} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>
+      )}
+    </svg>
+  );
+}
 
 function RoadTile({ gx, gy, tpx, roads }) {
   const h = (dx,dy) => roads.has(`${gx+dx},${gy+dy}`);
-  const N=h(0,-1), S=h(0,1), W=h(-1,0), E=h(1,0);
-  const c = tpx/2, rw = Math.max(4, tpx*0.25);
+  const north = h(0,-1);
+  const south = h(0,1);
+  const west = h(-1,0);
+  const east = h(1,0);
+
+  const visual = getRoadVisualType({ north, south, west, east });
+  const sources = getRoadAssetSources(visual.kind);
 
   return (
-    <svg className="road-svg" style={{left:gx*tpx,top:gy*tpx,width:tpx,height:tpx}} viewBox={`0 0 ${tpx} ${tpx}`}>
-      <rect x={c-rw/2} y={c-rw/2} width={rw} height={rw} fill="#282828"/>
-      {N && <rect x={c-rw/2} y={0} width={rw} height={c-rw/2+1} fill="#282828"/>}
-      {S && <rect x={c-rw/2} y={c+rw/2-1} width={rw} height={tpx-c-rw/2+1} fill="#282828"/>}
-      {W && <rect x={0} y={c-rw/2} width={c-rw/2+1} height={rw} fill="#282828"/>}
-      {E && <rect x={c+rw/2-1} y={c-rw/2} width={tpx-c-rw/2+1} height={rw} fill="#282828"/>}
-      {N&&S&&!W&&!E && <line x1={c} y1={0} x2={c} y2={tpx} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>}
-      {W&&E&&!N&&!S && <line x1={0} y1={c} x2={tpx} y2={c} stroke="#555" strokeWidth={0.8} strokeDasharray="5,4"/>}
-    </svg>
+    <div
+      style={{
+        position: 'absolute',
+        left: gx * tpx,
+        top: gy * tpx,
+        width: tpx,
+        height: tpx,
+        pointerEvents: 'none',
+        zIndex: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <AssetImage
+        sources={sources}
+        alt={`road-${visual.kind}`}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transform: `rotate(${visual.rotation}deg)`,
+          transformOrigin: 'center center',
+        }}
+        fallback={(
+          <FallbackRoadSvg
+            tpx={tpx}
+            north={north}
+            south={south}
+            west={west}
+            east={east}
+          />
+        )}
+      />
+    </div>
   );
 }
 
@@ -176,6 +268,50 @@ function getSmogShadow(smogStatus) {
   return undefined;
 }
 
+function BuildingFallback({ b, d, sz, clr, noR, showPowerStatus, powerStatus, showWaterStatus, waterStatus, showSewageStatus, sewageStatus, showSmogStatus, smogStatus }) {
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        borderRadius: 6,
+        border: '2px solid rgba(255,255,255,0.12)',
+        background: clr,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <span style={{fontSize:Math.max(9,sz*0.36),lineHeight:1}}>{d.e}</span>
+
+      {noR && sz > 32 && <span style={{fontSize:6,color:"#888",marginTop:1}}>brak dr.</span>}
+
+      {showPowerStatus && powerStatus === 'disconnected' && sz > 34 && (
+        <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>brak pr.</span>
+      )}
+
+      {showWaterStatus && waterStatus === 'disconnected' && sz > 34 && (
+        <span style={{fontSize:6,color:"#7dcfff",marginTop:1}}>brak w.</span>
+      )}
+
+      {showSewageStatus && sewageStatus === 'disconnected' && sz > 34 && (
+        <span style={{fontSize:6,color:"#d7a1ff",marginTop:1}}>brak k.</span>
+      )}
+
+      {showSmogStatus && smogStatus === 'high' && sz > 34 && (
+        <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>wys. CO₂</span>
+      )}
+
+      {showSmogStatus && smogStatus === 'reducer' && sz > 34 && (
+        <span style={{fontSize:6,color:"#00e87a",marginTop:1}}>redukcja</span>
+      )}
+    </div>
+  );
+}
+
 function BldTile({
   b,
   tpx,
@@ -194,10 +330,20 @@ function BldTile({
   const d = BD[b.type];
   if(!d) return null;
 
+  const assetConfig = getBuildingAssetConfig(b.type);
+  const hasAssetConfig = !!assetConfig;
+
   const clr = d.cl[Math.min(b.lv-1, d.cl.length-1)];
-  const sc = Math.min(0.5 + b.lv*0.08, 0.9);
-  const sz = tpx*sc;
-  const off = (tpx-sz)/2;
+  const baseScale = Math.min(0.5 + b.lv*0.08, 0.9);
+  const fallbackSize = tpx * baseScale;
+
+  const assetScale = assetConfig?.scale || 1.15;
+  const assetSize = hasAssetConfig ? tpx * assetScale : fallbackSize;
+  const assetYOffset = hasAssetConfig ? tpx * (assetConfig.yOffset || 0) : 0;
+
+  const sz = hasAssetConfig ? assetSize : fallbackSize;
+  const off = (tpx - sz) / 2;
+
   const noR = !d.nr && !hasRoad;
   const prog = b.building ? Math.max(0, Math.min(1, 1-(b.buildEnd-now)/BT[b.lv-1])) : 1;
   const tl = b.building ? Math.max(0, Math.ceil(b.buildEnd-now)) : 0;
@@ -211,21 +357,47 @@ function BldTile({
     sewageStatus,
   });
 
+  const finalShadow = showSmogStatus
+    ? getSmogShadow(smogStatus)
+    : statusShadow;
+
   return (
     <>
       {b.building && tpx > 26 && <div className="bld-timer">⏱ {ft(tl)}</div>}
-      <div style={{position:"absolute",left:off,top:off,width:sz,height:sz}}>
+
+      <div
+        style={{
+          position:"absolute",
+          left:off,
+          top:off + assetYOffset,
+          width:sz,
+          height:sz,
+          overflow:'visible',
+        }}
+      >
         <div
           className={`bld-inner ${isSel?'sel':''} ${noR?'noroad':''} ${b.building?'constructing':''}`}
           style={{
-            background:b.building?'rgba(255,180,0,0.1)':clr,
-            boxShadow: showSmogStatus ? getSmogShadow(smogStatus) : statusShadow,
+            background: hasAssetConfig ? 'transparent' : (b.building?'rgba(255,180,0,0.1)':clr),
+            boxShadow: finalShadow,
+            border: hasAssetConfig ? '0' : undefined,
+            overflow: 'visible',
+            width: '100%',
+            height: '100%',
           }}
         >
           {b.lv > 1 && <div className="bld-lv">Lv{b.lv}</div>}
 
           {(b.solar||b.co2f||b.greenRoof||showPowerStatus||showWaterStatus||showSewageStatus||showSmogStatus) && (
-            <div className="bld-badge">
+            <div
+              className="bld-badge"
+              style={{
+                background: hasAssetConfig ? 'rgba(5,12,20,0.78)' : undefined,
+                borderRadius: hasAssetConfig ? 999 : undefined,
+                padding: hasAssetConfig ? '2px 4px' : undefined,
+                zIndex: 5,
+              }}
+            >
               {b.solar?'☀️':''}
               {b.co2f?'🌿':''}
               {b.greenRoof?'🌱':''}
@@ -242,28 +414,50 @@ function BldTile({
             </div>
           )}
 
-          <span style={{fontSize:Math.max(9,sz*0.36),lineHeight:1}}>{d.e}</span>
-
-          {noR && sz > 32 && <span style={{fontSize:6,color:"#888",marginTop:1}}>brak dr.</span>}
-
-          {showPowerStatus && powerStatus === 'disconnected' && sz > 34 && (
-            <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>brak pr.</span>
-          )}
-
-          {showWaterStatus && waterStatus === 'disconnected' && sz > 34 && (
-            <span style={{fontSize:6,color:"#7dcfff",marginTop:1}}>brak w.</span>
-          )}
-
-          {showSewageStatus && sewageStatus === 'disconnected' && sz > 34 && (
-            <span style={{fontSize:6,color:"#d7a1ff",marginTop:1}}>brak k.</span>
-          )}
-
-          {showSmogStatus && smogStatus === 'high' && sz > 34 && (
-            <span style={{fontSize:6,color:"#ff7d7d",marginTop:1}}>wys. CO₂</span>
-          )}
-
-          {showSmogStatus && smogStatus === 'reducer' && sz > 34 && (
-            <span style={{fontSize:6,color:"#00e87a",marginTop:1}}>redukcja</span>
+          {hasAssetConfig ? (
+            <AssetImage
+              sources={assetConfig.sources}
+              alt={d.n}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                filter: b.building ? 'saturate(0.75) brightness(0.88)' : undefined,
+              }}
+              fallback={(
+                <BuildingFallback
+                  b={b}
+                  d={d}
+                  sz={fallbackSize}
+                  clr={clr}
+                  noR={noR}
+                  showPowerStatus={showPowerStatus}
+                  powerStatus={powerStatus}
+                  showWaterStatus={showWaterStatus}
+                  waterStatus={waterStatus}
+                  showSewageStatus={showSewageStatus}
+                  sewageStatus={sewageStatus}
+                  showSmogStatus={showSmogStatus}
+                  smogStatus={smogStatus}
+                />
+              )}
+            />
+          ) : (
+            <BuildingFallback
+              b={b}
+              d={d}
+              sz={fallbackSize}
+              clr={clr}
+              noR={noR}
+              showPowerStatus={showPowerStatus}
+              powerStatus={powerStatus}
+              showWaterStatus={showWaterStatus}
+              waterStatus={waterStatus}
+              showSewageStatus={showSewageStatus}
+              sewageStatus={sewageStatus}
+              showSmogStatus={showSmogStatus}
+              smogStatus={smogStatus}
+            />
           )}
 
           {b.building && (
@@ -363,6 +557,8 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
       const key = `${gx},${gy}`;
       const t = ter[gy]?.[gx] ?? 0;
       const isRd = G.roads.has(key);
+      const terrainAsset = !isRd ? getTerrainAssetPath(t) : null;
+
       const bg = isRd ? '#1a1a1a' : (TC[t]||TC[0]);
       const bo = isRd ? '#222' : (TB[t]||TB[0]);
 
@@ -381,10 +577,13 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
             height:tpx,
             background:bg,
             borderColor:bo,
+            backgroundImage: terrainAsset ? `url(${terrainAsset})` : undefined,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
           }}
           onClick={(e)=>{e.stopPropagation();onTileClick(gx,gy);}}
         >
-          {t === 2 && (
+          {t === 2 && !terrainAsset && (
             <div style={{
               position:"absolute",
               inset:0,
@@ -393,7 +592,7 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
             }}/>
           )}
 
-          {t === 6 && cam.zoom > 0.6 && (gx+gy)%2 === 0 && (
+          {t === 6 && cam.zoom > 0.6 && (gx+gy)%2 === 0 && !terrainAsset && (
             <div style={{
               position:"absolute",
               inset:0,
@@ -656,7 +855,7 @@ export default function Map({ G, cam, now, onTileClick, onBldClick, mapRef }) {
           top:b.y*tpx,
           width:tpx,
           height:tpx,
-          zIndex:isSel?20:b.building?8:6,
+          zIndex:isSel ? 500 : b.building ? 300 + b.y : 100 + b.y,
         }}
         onClick={(e)=>{e.stopPropagation();onBldClick(b.uid);}}
       >
